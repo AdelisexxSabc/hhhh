@@ -353,8 +353,12 @@ async function handleHtml(request, env) {
         .btn-del { background: #ff7875; }
         .btn-secondary { background: var(--grey); }
         .config-list-container { border: 1px solid #eee; border-radius: 4px; padding: 10px; max-height: 200px; overflow-y: auto; background: #fafafa; }
-        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: white; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px; }
+        .config-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: white; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px; cursor: move; user-select: none; transition: background 0.2s; }
         .config-item:last-child { border-bottom: none; }
+        .config-item:hover { background: #f0f0f0; }
+        .config-item.dragging { opacity: 0.5; background: #e6f7ff; }
+        .config-item .drag-handle { color: #999; margin-right: 8px; cursor: grab; font-weight: bold; }
+        .config-item .drag-handle:active { cursor: grabbing; }
         .config-item .del-btn { color: var(--danger); cursor: pointer; font-weight: bold; padding: 0 5px; }
         .config-add-box { display: flex; gap: 10px; margin-bottom: 10px; }
         .config-add-box textarea { flex: 1; min-height: 60px; }
@@ -391,12 +395,15 @@ async function handleHtml(request, env) {
         </div>
         <div class="grid">
           <div>
-            <label>默认反代 IP 列表</label>
+            <label>默认反代 IP 列表 <small style="color:#999;font-weight:normal;">(支持智能地理位置匹配)</small></label>
             <div class="config-add-box">
-              <textarea id="inputProxyIP" placeholder="批量添加，一行一个&#10;例如: 1.2.3.4 (自动补全 :443)"></textarea>
+              <textarea id="inputProxyIP" placeholder="批量添加，一行一个&#10;支持地理位置标识，节点会智能选择就近代理&#10;例如: ProxyIP.HK.CMLiussss.net:443&#10;例如: ProxyIP.JP.CMLiussss.net&#10;例如: 1.2.3.4 (自动补全 :443)"></textarea>
               <button onclick="addConfig('ProxyIP')" class="btn-success">添加</button>
             </div>
             <div class="config-list-container" id="listProxyIP"></div>
+            <div style="margin-top:8px;padding:8px;background:#f0f9ff;border:1px solid #bae7ff;border-radius:4px;font-size:12px;color:#0050b3;">
+              💡 <b>智能提示：</b>在代理地址中包含地区标识（如 HK/JP/US/SG），系统会根据目标地址自动选择同地区代理，提升连接速度。
+            </div>
           </div>
           <div>
             <label>优选域名列表 (支持别名 #Name)</label>
@@ -473,8 +480,54 @@ async function handleHtml(request, env) {
           container.innerHTML = '';
           if(list.length === 0) { container.innerHTML = '<div style="padding:10px;color:#999;text-align:center;">暂无数据</div>'; return; }
           list.forEach((item, index) => {
-            const div = document.createElement('div'); div.className = 'config-item';
-            div.innerHTML = \`<span>\${item}</span> <span class="del-btn" onclick="delConfig('\${type}', \${index})">×</span>\`;
+            const div = document.createElement('div'); 
+            div.className = 'config-item';
+            div.draggable = true;
+            div.dataset.index = index;
+            div.dataset.type = type;
+            div.innerHTML = \`<span class="drag-handle">☰</span><span style="flex:1">\${item}</span> <span class="del-btn" onclick="delConfig('\${type}', \${index})">×</span>\`;
+            
+            // 拖动开始
+            div.addEventListener('dragstart', (e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', index);
+              div.classList.add('dragging');
+            });
+            
+            // 拖动结束
+            div.addEventListener('dragend', () => {
+              div.classList.remove('dragging');
+            });
+            
+            // 拖动经过
+            div.addEventListener('dragover', (e) => {
+              e.preventDefault();
+              const draggingEl = container.querySelector('.dragging');
+              if (!draggingEl || draggingEl === div) return;
+              const rect = div.getBoundingClientRect();
+              const offset = e.clientY - rect.top - rect.height / 2;
+              if (offset > 0) {
+                div.after(draggingEl);
+              } else {
+                div.before(draggingEl);
+              }
+            });
+            
+            // 放置
+            div.addEventListener('drop', (e) => {
+              e.preventDefault();
+              const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+              const toIndex = parseInt(div.dataset.index);
+              if (fromIndex === toIndex) return;
+              
+              const targetList = type === 'ProxyIP' ? proxyIPs : bestDomains;
+              const [movedItem] = targetList.splice(fromIndex, 1);
+              const newToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+              targetList.splice(newToIndex, 0, movedItem);
+              renderList(type);
+              toast('✅ 顺序已调整');
+            });
+            
             container.appendChild(div);
           });
         }
