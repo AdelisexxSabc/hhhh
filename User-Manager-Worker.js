@@ -1,9 +1,8 @@
 /**
  * 部署说明：
- * 1. 在 Cloudflare Workers 创建一个新的 Worker (例如: uuid-manager)
- * 2. 在 Workers -> Settings -> Variables 中添加：
- * - ADMIN_PASSWORD: 你的后台登录密码 (例如: uuid)
- * 3. 在 Workers -> Settings -> KV Namespace Bindings 绑定该 KV，Variable Name 填 "VLESS_KV"
+ * 1. Cloudflare D1 绑定变量名必须为: DB
+ * 2. 环境变量 ADMIN_PASSWORD 依然需要设置
+ * 3. (可选) 如果想从 KV 迁移数据，请暂时保留 KV 绑定 (变量名 VLESS_KV)，迁移完后再解绑。
  */
 
 const SYSTEM_CONFIG_KEY = "SYSTEM_SETTINGS_V1";
@@ -25,6 +24,7 @@ export default {
       if (path === '/api/admin/delete') return await handleAdminDeleteBatch(request, env);
       if (path === '/api/admin/status') return await handleAdminStatusBatch(request, env);
       if (path === '/api/admin/saveSettings') return await handleAdminSaveSettings(request, env);
+      if (path === '/api/admin/migrate') return await handleAdminMigrate(request, env);
     }
 
     // 3. 返回管理页面 HTML
@@ -32,38 +32,109 @@ export default {
   }
 };
 
-// 获取数据
-async function handleApiData(request, env) {
-  const settingsJson = await env.VLESS_KV.get(SYSTEM_CONFIG_KEY);
-  const settings = settingsJson ? JSON.parse(settingsJson) : null;
-  const list = await env.VLESS_KV.list();
-  
-  const users = {};
-  const now = Date.now();
+// --- 核心数据库操作封装 ---
 
-  for (const key of list.keys) {
-    if (key.name === SYSTEM_CONFIG_KEY) continue;
+// 获取所有有效用户 (API用)
+async function dbGetActiveUsers(env) {
+    const now = Date.now();
+    // SQL: 选出 (启用=1) 且 (不过期 或 过期时间>现在) 的用户
+    const { results } = await env.DB.prepare(
+        "SELECT uuid, name FROM users WHERE enabled = 1 AND (expiry IS NULL OR expiry > ?)"
+    ).bind(now).all();
+    
+    const users = {};
+    results.forEach(r => users[r.uuid] = r.name);
+    return users;
+}
 
-    let userData = key.metadata;
-    if (!userData) userData = await env.VLESS_KV.get(key.name, { type: 'json' });
-
-    const isEnabled = userData && (userData.enabled !== false);
-    const isNotExpired = userData && (!userData.expiry || userData.expiry > now);
-
-    if (isEnabled && isNotExpired) {
-      users[key.name] = userData.name; 
+// 获取全局配置
+async function dbGetSettings(env) {
+    try {
+        const row = await env.DB.prepare("SELECT value FROM settings WHERE key = ?").bind(SYSTEM_CONFIG_KEY).first();
+        return row ? JSON.parse(row.value) : null;
+    } catch (e) {
+        return null;
     }
-  }
+}
+
+// 获取所有用户列表 (管理面板用)
+async function dbGetAllUsers(env) {
+    try {
+        const { results } = await env.DB.prepare("SELECT * FROM users ORDER BY create_at DESC").all();
+        return results.map(u => ({
+            uuid: u.uuid,
+            name: u.name,
+            expiry: u.expiry,
+            createAt: u.create_at,
+            enabled: u.enabled === 1
+        }));
+    } catch (e) {
+        return [];
+    }
+}
+
+// -------------------------
+
+// API: 返回数据给节点
+async function handleApiData(request, env) {
+  const [users, rawSettings] = await Promise.all([
+      dbGetActiveUsers(env),
+      dbGetSettings(env)
+  ]);
+  
+  // 修复：防止 settings 为 null 导致 API 报错
+  const settings = rawSettings || {};
 
   return new Response(JSON.stringify({
     users: users,
-    settings: settings || {} 
+    settings: settings
   }), {
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
   });
 }
 
-// 添加用户
+// API: 数据迁移 (KV -> D1)
+async function handleAdminMigrate(request, env) {
+    if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
+
+    if (!env.VLESS_KV) {
+        return new Response('未绑定 VLESS_KV，无法迁移旧数据。如果是全新部署，请忽略此功能。', { status: 400 });
+    }
+
+    let count = 0;
+    
+    // 1. 迁移配置
+    const settingsJson = await env.VLESS_KV.get(SYSTEM_CONFIG_KEY);
+    if (settingsJson) {
+        await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").bind(SYSTEM_CONFIG_KEY, settingsJson).run();
+    }
+
+    // 2. 迁移用户
+    const list = await env.VLESS_KV.list();
+    for (const key of list.keys) {
+        if (key.name === SYSTEM_CONFIG_KEY) continue;
+        
+        let u = key.metadata;
+        if (!u) u = await env.VLESS_KV.get(key.name, { type: 'json' });
+        
+        if (u) {
+            await env.DB.prepare(
+                "INSERT OR REPLACE INTO users (uuid, name, expiry, create_at, enabled) VALUES (?, ?, ?, ?, ?)"
+            ).bind(
+                key.name, 
+                u.name || '未命名', 
+                u.expiry || null, 
+                u.createAt || Date.now(), 
+                (u.enabled === false ? 0 : 1)
+            ).run();
+            count++;
+        }
+    }
+
+    return new Response(`迁移成功！已将 ${count} 条 KV 数据导入 D1 数据库。`, { status: 200 });
+}
+
+// API: 添加用户
 async function handleAdminAdd(request, env) {
   if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
   
@@ -81,25 +152,23 @@ async function handleAdminAdd(request, env) {
     expiry = date.getTime();
   }
 
-  const userData = { name, expiry, createAt: Date.now(), enabled: true };
-  
   let targetUUIDs = [];
   if (customUUIDsInput && customUUIDsInput.trim().length > 0) {
       const rawList = customUUIDsInput.split(/[,，\n\s]+/);
-      targetUUIDs = [...new Set(rawList.map(u => u.trim()).filter(u => u.length > 0))];
+      targetUUIDs = [...new Set(rawList.map(u => u.trim().toLowerCase()).filter(u => u.length > 0))];
   } else {
       targetUUIDs.push(crypto.randomUUID());
   }
 
-  const writeJobs = targetUUIDs.map(uuid => 
-      env.VLESS_KV.put(uuid, JSON.stringify(userData), { metadata: userData })
-  );
-  await Promise.all(writeJobs);
+  const stmt = env.DB.prepare("INSERT INTO users (uuid, name, expiry, create_at, enabled) VALUES (?, ?, ?, ?, 1)");
+  const batch = targetUUIDs.map(uuid => stmt.bind(uuid, name, expiry, Date.now()));
+  
+  await env.DB.batch(batch);
 
   return new Response('OK', { status: 200 });
 }
 
-// 编辑用户
+// API: 编辑用户
 async function handleAdminUpdate(request, env) {
   if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
 
@@ -110,10 +179,6 @@ async function handleAdminUpdate(request, env) {
 
   if (!uuid) return new Response('UUID required', { status: 400 });
 
-  const oldData = await env.VLESS_KV.get(uuid, { type: 'json' });
-  const createAt = oldData ? oldData.createAt : Date.now();
-  const enabled = oldData ? (oldData.enabled !== false) : true;
-
   let expiry = null;
   if (expiryDateStr) {
     const date = new Date(expiryDateStr);
@@ -121,38 +186,36 @@ async function handleAdminUpdate(request, env) {
     expiry = date.getTime();
   }
 
-  const userData = { name: name || "未命名", expiry, createAt, enabled };
-  
-  await env.VLESS_KV.put(uuid, JSON.stringify(userData), { metadata: userData });
+  await env.DB.prepare("UPDATE users SET name = ?, expiry = ? WHERE uuid = ?")
+    .bind(name || '未命名', expiry, uuid)
+    .run();
+
   return new Response('OK', { status: 200 });
 }
 
-// 批量修改状态
+// API: 批量修改状态
 async function handleAdminStatusBatch(request, env) {
   if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
   
   const formData = await request.formData();
   const uuids = formData.get('uuids'); 
-  const enabledStr = formData.get('enabled');
+  const enabledStr = formData.get('enabled'); // "true" or "false"
   
   if (!uuids) return new Response('UUIDs required', { status: 400 });
   
-  const targetEnabled = enabledStr === 'true';
+  const enabledVal = enabledStr === 'true' ? 1 : 0;
   const uuidList = uuids.split(',');
 
-  const jobs = uuidList.map(async (uuid) => {
-      const userData = await env.VLESS_KV.get(uuid, { type: 'json' });
-      if (userData) {
-          userData.enabled = targetEnabled;
-          await env.VLESS_KV.put(uuid, JSON.stringify(userData), { metadata: userData });
-      }
-  });
+  // 构建 SQL IN 语句
+  const placeholders = uuidList.map(() => '?').join(',');
+  const query = `UPDATE users SET enabled = ? WHERE uuid IN (${placeholders})`;
+  
+  await env.DB.prepare(query).bind(enabledVal, ...uuidList).run();
 
-  await Promise.all(jobs);
   return new Response('OK', { status: 200 });
 }
 
-// 批量删除用户
+// API: 批量删除用户
 async function handleAdminDeleteBatch(request, env) {
   if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
   const formData = await request.formData();
@@ -160,12 +223,13 @@ async function handleAdminDeleteBatch(request, env) {
   
   if (uuids) {
       const uuidList = uuids.split(',');
-      await Promise.all(uuidList.map(u => env.VLESS_KV.delete(u)));
+      const placeholders = uuidList.map(() => '?').join(',');
+      await env.DB.prepare(`DELETE FROM users WHERE uuid IN (${placeholders})`).bind(...uuidList).run();
   }
   return new Response('OK', { status: 200 });
 }
 
-// 保存全局配置
+// API: 保存全局配置
 async function handleAdminSaveSettings(request, env) {
   if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
   const formData = await request.formData();
@@ -178,7 +242,11 @@ async function handleAdminSaveSettings(request, env) {
   let bestDomains = bestDomainsStr ? bestDomainsStr.split(/[\n,]+/).map(d => d.trim()).filter(d => d.length > 0) : [];
 
   const settings = { proxyIPs, bestDomains, subUrl };
-  await env.VLESS_KV.put(SYSTEM_CONFIG_KEY, JSON.stringify(settings));
+  
+  await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
+    .bind(SYSTEM_CONFIG_KEY, JSON.stringify(settings))
+    .run();
+
   return new Response('OK', { status: 200 });
 }
 
@@ -210,26 +278,24 @@ async function handleHtml(request, env) {
     return new Response(`<!DOCTYPE html><html lang="zh-CN"><head><title>VLESS 登录</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#f0f2f5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:system-ui}.box{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);width:300px}input{width:100%;padding:10px;margin:10px 0;border:1px solid #ddd;border-radius:4px}button{width:100%;padding:10px;background:#1890ff;color:white;border:none;border-radius:4px;cursor:pointer}</style></head><body><div class="box"><h2>系统登录</h2><form method="POST"><input type="password" name="password" placeholder="密码" required><button type="submit">登录</button></form></div></body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
-  const list = await env.VLESS_KV.list();
-  const settingsJson = await env.VLESS_KV.get(SYSTEM_CONFIG_KEY);
-  let settings = settingsJson ? JSON.parse(settingsJson) : { proxyIPs: [], bestDomains: [], subUrl: "" };
+  // 【关键修复】先并发获取数据
+  const [usersData, rawSettings] = await Promise.all([
+      dbGetAllUsers(env),
+      dbGetSettings(env)
+  ]);
   
+  // 【关键修复】如果 rawSettings 为 null（首次使用 D1），则给一个安全的默认对象
+  const settings = rawSettings || { proxyIPs: [], bestDomains: [], subUrl: "" };
+  
+  // 兼容处理：确保即使字段不存在也不会报错
   let proxyIPsList = settings.proxyIPs || (settings.proxyIP ? [settings.proxyIP] : []);
   let bestDomainsList = settings.bestDomains || [];
   let subUrl = settings.subUrl || "";
 
-  let usersData = [];
-  for (const key of list.keys) {
-    if (key.name === SYSTEM_CONFIG_KEY) continue;
-    let data = key.metadata;
-    if (!data) data = await env.VLESS_KV.get(key.name, { type: 'json' });
-    if (data) usersData.push({ uuid: key.name, ...data });
-  }
-  usersData.sort((a, b) => (b.createAt || 0) - (a.createAt || 0));
-
   const rows = usersData.map(u => {
     const isExpired = u.expiry && u.expiry < Date.now();
-    const isEnabled = u.enabled !== false; 
+    const isEnabled = u.enabled; 
+    
     const expiryDateObj = u.expiry ? new Date(u.expiry) : null;
     const expiryText = expiryDateObj ? expiryDateObj.toLocaleDateString('zh-CN') : '永久有效';
     const expiryVal = expiryDateObj ? expiryDateObj.toISOString().split('T')[0] : '';
@@ -260,7 +326,7 @@ async function handleHtml(request, env) {
     <!DOCTYPE html>
     <html lang="zh-CN">
     <head>
-      <title>VLESS 控制面板</title>
+      <title>VLESS 控制面板 (D1版)</title>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
@@ -308,11 +374,12 @@ async function handleHtml(request, env) {
         .modal { background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 400px; }
         #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 4px; opacity: 0; pointer-events: none; transition: 0.3s; z-index: 200; }
         #toast.show { opacity: 1; bottom: 50px; }
+        .footer-actions { margin-top: 40px; padding-top: 20px; border-top: 1px dashed #ddd; text-align: center; color: #999; }
       </style>
     </head>
     <body>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <h1>VLESS 控制面板</h1>
+        <h1>VLESS 控制面板 (D1 增强版)</h1>
         <span style="font-size:12px;color:#888">${new Date().toLocaleDateString('zh-CN')}</span>
       </div>
 
@@ -371,6 +438,12 @@ async function handleHtml(request, env) {
             <tbody>${rows}</tbody>
           </table>
         </div>
+      </div>
+
+      <!-- 底部高级维护区 -->
+      <div class="footer-actions">
+        <p>高级维护: 数据库升级</p>
+        <button onclick="migrateData()" style="background:#595959;font-size:12px;padding:6px 12px;">从 KV 导入旧数据 (Import from KV)</button>
       </div>
 
       <!-- 编辑弹窗 -->
@@ -466,6 +539,20 @@ async function handleHtml(request, env) {
         function openEdit(uuid, name, exp) { document.getElementById('editUuid').value=uuid; document.getElementById('editUuidDisplay').value=uuid; document.getElementById('editName').value=name; document.getElementById('editExpiryDate').value=exp; document.getElementById('editModal').style.display='flex'; }
         function closeEdit() { document.getElementById('editModal').style.display='none'; }
         function copy(t) { navigator.clipboard.writeText(t); toast('复制成功'); }
+
+        // 数据清洗
+        async function migrateData() {
+            if(!confirm('确认将旧 KV 数据导入到 D1 数据库？(仅首次迁移使用)')) return;
+            const res = await fetch('/api/admin/migrate', { method: 'POST' });
+            if(res.ok) {
+                const msg = await res.text();
+                alert(msg);
+                location.reload();
+            } else {
+                const err = await res.text();
+                alert('操作失败: ' + err);
+            }
+        }
 
         // 初始化渲染
         renderList('ProxyIP'); renderList('BestDomain');
