@@ -3843,25 +3843,8 @@ async function renderUserDashboard(env, userInfo) {
             window.location.href = '${adminPath}';
         }
         
-        async function checkAdminRole() {
-            try {
-                const response = await fetch('/api/admin/check', {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                });
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.isAdmin) {
-                        document.getElementById('adminEntryBtn').style.display = 'block';
-                    }
-                }
-            } catch (error) {
-                console.log('Not an admin user');
-            }
-        }
-        
-        // 页面加载时检查管理员权限
-        checkAdminRole();
+        // 直接显示管理员后台入口，让所有用户都能看到
+        document.getElementById('adminEntryBtn').style.display = 'block';
         
         // 点击页面其他地方关闭下拉菜单
         document.addEventListener('click', function() {
@@ -4531,7 +4514,28 @@ async function handleUserCreateOrder(request, env) {
 
 // 检查管理员权限
 async function handleAdminCheck(request, env) {
-    const isAdmin = await checkAuth(request, env);
+    // 先检查管理员 session
+    let isAdmin = await checkAuth(request, env);
+    
+    // 如果不是管理员 session，检查用户 session 是否是管理员账号
+    if (!isAdmin) {
+        const cookie = request.headers.get('Cookie');
+        if (cookie) {
+            const match = cookie.match(/user_session=([^;]+)/);
+            if (match) {
+                const session = await dbValidateUserSession(env, match[1]);
+                if (session) {
+                    const user = await dbGetUserAccountById(env, session.user_id);
+                    const adminUsername = env.ADMIN_USERNAME || 'admin';
+                    // 检查用户名是否等于管理员用户名
+                    if (user && user.username === adminUsername) {
+                        isAdmin = true;
+                    }
+                }
+            }
+        }
+    }
+    
     return new Response(JSON.stringify({ isAdmin }), { 
         status: 200, 
         headers: { 'Content-Type': 'application/json; charset=utf-8' } 
