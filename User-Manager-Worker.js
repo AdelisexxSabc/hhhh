@@ -37,6 +37,11 @@ export default {
       if (path === '/api/admin/logout') return await handleAdminLogout(request, env);
       if (path === '/api/admin/changePassword') return await handleAdminChangePassword(request, env);
     }
+    
+    // 获取公告 API
+    if (request.method === 'GET' && path === '/api/announcement') {
+      return await handleGetAnnouncement(request, env);
+    }
 
     // 3. 管理员操作 API
     if (request.method === 'POST') {
@@ -48,6 +53,10 @@ export default {
       if (path === '/api/admin/updateSystemSettings') return await handleAdminUpdateSystemSettings(request, env);
       if (path === '/api/admin/migrate') return await handleAdminMigrate(request, env);
       if (path === '/api/admin/fetchBestIPs') return await handleFetchBestIPs(request, env);
+      // 公告管理
+      if (path === '/api/admin/announcements/create') return await handleAdminCreateAnnouncement(request, env);
+      if (path === '/api/admin/announcements/update') return await handleAdminUpdateAnnouncement(request, env);
+      if (path === '/api/admin/announcements/delete') return await handleAdminDeleteAnnouncement(request, env);
       // 套餐管理
       if (path === '/api/admin/plans/create') return await handleAdminCreatePlan(request, env);
       if (path === '/api/admin/plans/update') return await handleAdminUpdatePlan(request, env);
@@ -64,6 +73,12 @@ export default {
       if (path === '/api/admin/plans') return await handleAdminGetPlans(request, env);
       if (path === '/api/admin/orders') return await handleAdminGetOrders(request, env);
       if (path === '/api/admin/check') return await handleAdminCheck(request, env);
+      // 公告管理
+      if (path === '/api/admin/announcements') return await handleAdminGetAnnouncements(request, env);
+      if (path.startsWith('/api/admin/announcements/')) {
+        const id = path.split('/').pop();
+        if (id && !isNaN(id)) return await handleAdminGetAnnouncement(request, env, id);
+      }
     }
     if (request.method === 'GET') {
       if (path === '/api/user/orders') return await handleUserGetOrders(request, env);
@@ -1185,19 +1200,30 @@ async function handleAdminUpdateSystemSettings(request, env) {
   if (!(await checkAuth(request, env))) return new Response('Unauthorized', { status: 401 });
   const formData = await request.formData();
   
-  const enableRegister = formData.get('enableRegister') === 'true';
-  const autoApproveOrder = formData.get('autoApproveOrder') === 'true';
-
   // 获取现有设置
   const currentSettings = await dbGetSettings(env) || {};
-  const wasAutoApproveEnabled = currentSettings.autoApproveOrder === true;
   
-  currentSettings.enableRegister = enableRegister;
-  currentSettings.autoApproveOrder = autoApproveOrder;
+  // 更新开关设置
+  if (formData.has('enableRegister')) {
+    const enableRegister = formData.get('enableRegister') === 'true';
+    const autoApproveOrder = formData.get('autoApproveOrder') === 'true';
+    const wasAutoApproveEnabled = currentSettings.autoApproveOrder === true;
+    
+    currentSettings.enableRegister = enableRegister;
+    currentSettings.autoApproveOrder = autoApproveOrder;
+    
+    // 如果自动审核开关从关闭变为开启，增加版本号（刷新所有用户的使用次数）
+    if (!wasAutoApproveEnabled && autoApproveOrder) {
+      currentSettings.autoApproveVersion = (currentSettings.autoApproveVersion || 0) + 1;
+    }
+  }
   
-  // 如果自动审核开关从关闭变为开启，增加版本号（刷新所有用户的使用次数）
-  if (!wasAutoApproveEnabled && autoApproveOrder) {
-    currentSettings.autoApproveVersion = (currentSettings.autoApproveVersion || 0) + 1;
+  // 更新公告设置
+  if (formData.has('announcementTitle') || formData.has('announcementContent')) {
+    currentSettings.announcementTitle = formData.get('announcementTitle') || '';
+    currentSettings.announcementContent = formData.get('announcementContent') || '';
+    // 更新公告版本号，用于强制用户重新查看公告
+    currentSettings.announcementVersion = (currentSettings.announcementVersion || 0) + 1;
   }
   
   await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
@@ -1527,34 +1553,38 @@ async function handleAdminPanel(request, env, adminPath) {
           <div class="sidebar-header">
             <h1>vless-snippets</h1>
             <div class="date">${new Date().toLocaleDateString('zh-CN')}</div>
-            <button onclick="adminLogout()" style="margin-top:10px;width:100%;padding:8px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);border-radius:4px;cursor:pointer;font-size:13px;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">🚪 退出登录</button>
+            <button onclick="adminLogout()" style="margin-top:10px;width:100%;padding:8px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);border-radius:4px;cursor:pointer;font-size:13px;" onmouseover="this.style.background=&quot;rgba(255,255,255,0.3)&quot;" onmouseout="this.style.background=&quot;rgba(255,255,255,0.2)&quot;">🚪 退出登录</button>
           </div>
           <ul class="menu">
-            <li class="menu-item active" onclick="switchSection('dashboard')">
+            <li class="menu-item active" data-section="dashboard" onclick="switchSection('dashboard')">
               <span class="menu-item-icon">📊</span>
               <span>仪表盘</span>
             </li>
-            <li class="menu-item" onclick="switchSection('proxy-ips')">
+            <li class="menu-item" data-section="proxy-ips" onclick="switchSection('proxy-ips')">
               <span class="menu-item-icon">🌐</span>
               <span>反代 IP</span>
             </li>
-            <li class="menu-item" onclick="switchSection('best-domains')">
+            <li class="menu-item" data-section="best-domains" onclick="switchSection('best-domains')">
               <span class="menu-item-icon">⭐</span>
               <span>优选域名</span>
             </li>
-            <li class="menu-item" onclick="switchSection('users')">
+            <li class="menu-item" data-section="users" onclick="switchSection('users')">
               <span class="menu-item-icon">👥</span>
               <span>用户管理</span>
             </li>
-            <li class="menu-item" onclick="switchSection('plans')">
+            <li class="menu-item" data-section="announcement" onclick="switchSection('announcement')">
+              <span class="menu-item-icon">📢</span>
+              <span>公告管理</span>
+            </li>
+            <li class="menu-item" data-section="plans" onclick="switchSection('plans')">
               <span class="menu-item-icon">📦</span>
               <span>套餐管理</span>
             </li>
-            <li class="menu-item" onclick="switchSection('orders')">
+            <li class="menu-item" data-section="orders" onclick="switchSection('orders')">
               <span class="menu-item-icon">💳</span>
               <span>订单管理</span>
             </li>
-            <li class="menu-item" onclick="switchSection('change-password')">
+            <li class="menu-item" data-section="change-password" onclick="switchSection('change-password')">
               <span class="menu-item-icon">🔒</span>
               <span>修改密码</span>
             </li>
@@ -1699,6 +1729,35 @@ async function handleAdminPanel(request, env, adminPath) {
             </div>
           </div>
 
+          <!-- 公告管理 -->
+          <div id="section-announcement" class="section">
+            <div class="content-header">
+              <h2>📢 公告管理</h2>
+            </div>
+            <div class="content-body">
+              <div class="card">
+                <div style="margin-bottom:20px;padding:15px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:8px;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span style="font-size:16px;">ℹ️</span>
+                    <strong style="color:#0050b3;">功能说明</strong>
+                  </div>
+                  <div style="color:#096dd9;line-height:1.6;font-size:14px;">
+                    <p style="margin:5px 0;">• 启用的公告将在用户登录后按顺序弹出显示</p>
+                    <p style="margin:5px 0;">• 用户可选择"不再提示"，但更新公告后会再次显示</p>
+                    <p style="margin:5px 0;">• 可添加多个公告，通过开关控制是否显示</p>
+                  </div>
+                </div>
+                
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                  <h3 style="margin:0;color:#333;">公告列表</h3>
+                  <button onclick="openAddAnnouncement()" class="btn-primary" style="padding:8px 20px;">+ 添加公告</button>
+                </div>
+                
+                <div id="announcementsList"></div>
+              </div>
+            </div>
+          </div>
+
           <!-- 修改密码 -->
           <div id="section-change-password" class="section">
             <div class="content-header">
@@ -1802,7 +1861,7 @@ async function handleAdminPanel(request, env, adminPath) {
         </div>
       </div>
 
-      <!-- 编辑弹窗 -->
+      <!-- 编辑用户弹窗 -->
       <div class="modal-overlay" id="editModal">
         <div class="modal">
           <h3>编辑用户</h3>
@@ -1811,6 +1870,48 @@ async function handleAdminPanel(request, env, adminPath) {
           <div style="margin-bottom:15px"><label>备注名称</label><input type="text" id="editName"></div>
           <div style="margin-bottom:20px"><label>到期时间</label><input type="date" id="editExpiryDate"></div>
           <div style="text-align:right;"><button onclick="closeEdit()" style="background:#999;margin-right:10px">取消</button><button onclick="saveUserEdit()" id="editSaveBtn" class="btn-primary">保存</button></div>
+        </div>
+      </div>
+
+      <!-- 编辑套餐弹窗 -->
+      <div class="modal-overlay" id="editPlanModal">
+        <div class="modal">
+          <h3>编辑套餐</h3>
+          <input type="hidden" id="editPlanId">
+          <div style="margin-bottom:15px"><label>套餐名称</label><input type="text" id="editPlanName"></div>
+          <div style="margin-bottom:15px"><label>时长(天)</label><input type="number" id="editPlanDuration" min="1"></div>
+          <div style="margin-bottom:15px"><label>套餐描述</label><textarea id="editPlanDescription" style="min-height:60px"></textarea></div>
+          <div style="margin-bottom:20px"><label>价格</label><input type="number" id="editPlanPrice" min="0" step="0.01"></div>
+          <div style="text-align:right;"><button onclick="closePlanEdit()" style="background:#999;margin-right:10px">取消</button><button onclick="savePlanEdit()" id="editPlanSaveBtn" class="btn-primary">保存</button></div>
+        </div>
+      </div>
+      
+      <!-- 编辑公告弹窗 -->
+      <div class="modal-overlay" id="editAnnouncementModal">
+        <div class="modal" style="max-width:600px;">
+          <h3 id="announcementModalTitle">添加公告</h3>
+          <input type="hidden" id="editAnnouncementId">
+          <div style="margin-bottom:15px">
+            <label>公告标题</label>
+            <input type="text" id="editAnnouncementTitle" placeholder="例如：系统维护通知">
+          </div>
+          <div style="margin-bottom:15px">
+            <label>公告内容</label>
+            <textarea id="editAnnouncementContent" placeholder="支持换行，最多500字" style="min-height:120px;" maxlength="500"></textarea>
+            <div style="text-align:right;font-size:12px;color:#999;margin-top:5px;">
+              <span id="editAnnouncementCharCount">0</span>/500
+            </div>
+          </div>
+          <div style="margin-bottom:15px">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <input type="checkbox" id="editAnnouncementEnabled" checked style="width:auto;">
+              <span>启用此公告</span>
+            </label>
+          </div>
+          <div style="text-align:right;">
+            <button onclick="closeAnnouncementEdit()" style="background:#999;margin-right:10px">取消</button>
+            <button onclick="saveAnnouncementEdit()" id="editAnnouncementSaveBtn" class="btn-primary">保存</button>
+          </div>
         </div>
       </div>
       
@@ -2055,8 +2156,155 @@ async function handleAdminPanel(request, env, adminPath) {
           }
         }
         
+        // 公告管理功能
+        async function loadAnnouncements() {
+          try {
+            const res = await fetch('/api/admin/announcements');
+            const data = await res.json();
+            if(!data.success) return;
+            
+            const container = document.getElementById('announcementsList');
+            if(!container) return;
+            
+            if(data.announcements.length === 0) {
+              container.innerHTML = '<p style="text-align:center;color:#999;padding:40px 0;">暂无公告，点击右上角添加</p>';
+              return;
+            }
+            
+            let html = '<div style="overflow-x:auto;"><table style="width:100%;min-width:800px;"><thead><tr><th width="50">#</th><th width="80">显示</th><th>标题</th><th width="150">创建时间</th><th width="150">操作</th></tr></thead><tbody>';
+            
+            data.announcements.forEach((item, index) => {
+              const createdDate = new Date(item.created_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+              const statusColor = item.enabled ? '#52c41a' : '#d9d9d9';
+              const statusText = item.enabled ? '已启用' : '已禁用';
+              
+              html += '<tr>';
+              html += '<td>' + (index + 1) + '</td>';
+              html += '<td><span style="display:inline-block;padding:4px 12px;background:' + statusColor + ';color:white;border-radius:12px;font-size:12px;">' + statusText + '</span></td>';
+              html += '<td style="font-weight:500;">' + escapeHtml(item.title) + '</td>';
+              html += '<td style="color:#999;">' + createdDate + '</td>';
+              html += '<td><button onclick="editAnnouncement(' + item.id + ')" class="btn-action btn-edit">编辑</button> ';
+              html += '<button onclick="deleteAnnouncement(' + item.id + ')" class="btn-action btn-del">删除</button></td>';
+              html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+          } catch(e) {
+            console.error('加载公告失败:', e);
+          }
+        }
+        
+        function openAddAnnouncement() {
+          document.getElementById('announcementModalTitle').innerText = '添加公告';
+          document.getElementById('editAnnouncementId').value = '';
+          document.getElementById('editAnnouncementTitle').value = '';
+          document.getElementById('editAnnouncementContent').value = '';
+          document.getElementById('editAnnouncementEnabled').checked = true;
+          document.getElementById('editAnnouncementCharCount').innerText = '0';
+          document.getElementById('editAnnouncementModal').style.display = 'flex';
+        }
+        
+        async function editAnnouncement(id) {
+          try {
+            const res = await fetch('/api/admin/announcements/' + id);
+            const data = await res.json();
+            if(!data.success) return alert('获取公告失败');
+            
+            const item = data.announcement;
+            document.getElementById('announcementModalTitle').innerText = '编辑公告';
+            document.getElementById('editAnnouncementId').value = item.id;
+            document.getElementById('editAnnouncementTitle').value = item.title;
+            document.getElementById('editAnnouncementContent').value = item.content;
+            document.getElementById('editAnnouncementEnabled').checked = item.enabled === 1;
+            document.getElementById('editAnnouncementCharCount').innerText = item.content.length;
+            document.getElementById('editAnnouncementModal').style.display = 'flex';
+          } catch(e) {
+            alert('获取公告失败: ' + e.message);
+          }
+        }
+        
+        function closeAnnouncementEdit() {
+          document.getElementById('editAnnouncementModal').style.display = 'none';
+        }
+        
+        async function saveAnnouncementEdit() {
+          const id = document.getElementById('editAnnouncementId').value;
+          const title = document.getElementById('editAnnouncementTitle').value.trim();
+          const content = document.getElementById('editAnnouncementContent').value.trim();
+          const enabled = document.getElementById('editAnnouncementEnabled').checked;
+          
+          if(!title || !content) return alert('请填写标题和内容');
+          
+          const btn = document.getElementById('editAnnouncementSaveBtn');
+          btn.disabled = true;
+          btn.innerText = '保存中...';
+          
+          const form = new FormData();
+          if(id) form.append('id', id);
+          form.append('title', title);
+          form.append('content', content);
+          form.append('enabled', enabled ? '1' : '0');
+          
+          try {
+            const url = id ? '/api/admin/announcements/update' : '/api/admin/announcements/create';
+            const res = await fetch(url, { method: 'POST', body: form });
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+              toast('✅ ' + (id ? '更新成功' : '添加成功'));
+              closeAnnouncementEdit();
+              loadAnnouncements();
+            } else {
+              alert((id ? '更新' : '添加') + '失败: ' + result.error);
+            }
+          } catch(e) {
+            alert('操作失败: ' + e.message);
+          } finally {
+            btn.disabled = false;
+            btn.innerText = '保存';
+          }
+        }
+        
+        async function deleteAnnouncement(id) {
+          if(!confirm('确定要删除此公告吗？')) return;
+          
+          const form = new FormData();
+          form.append('id', id);
+          
+          try {
+            const res = await fetch('/api/admin/announcements/delete', { method: 'POST', body: form });
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+              toast('✅ 删除成功');
+              loadAnnouncements();
+            } else {
+              alert('删除失败: ' + result.error);
+            }
+          } catch(e) {
+            alert('删除失败: ' + e.message);
+          }
+        }
+        
+        // 监听公告内容输入，更新字符计数
+        document.addEventListener('DOMContentLoaded', function() {
+          const content = document.getElementById('editAnnouncementContent');
+          if(content) {
+            content.addEventListener('input', function() {
+              document.getElementById('editAnnouncementCharCount').innerText = this.value.length;
+            });
+          }
+        });
+        
         async function saveSettings() {
-          const btn = document.getElementById('saveBtn'); btn.innerText = '保存中...'; btn.disabled = true;
+          // 获取所有保存按钮，动态更新状态
+          const saveProxyBtn = document.getElementById('saveProxyBtn');
+          const saveDomainBtn = document.getElementById('saveDomainBtn');
+          
+          // 禁用所有保存按钮并显示加载状态
+          if (saveProxyBtn) { saveProxyBtn.innerText = '保存中...'; saveProxyBtn.disabled = true; }
+          if (saveDomainBtn) { saveDomainBtn.innerText = '保存中...'; saveDomainBtn.disabled = true; }
           
           // 前端预检查：统计每条线路的IP数量
           const lineStats = {};
@@ -2092,8 +2340,9 @@ async function handleAdminPanel(request, env, adminPath) {
             toast('❌ 网络错误'); 
           }
           
-          btn.innerText = '保存全部配置'; 
-          btn.disabled = false;
+          // 恢复所有按钮状态
+          if (saveProxyBtn) { saveProxyBtn.innerText = '保存配置'; saveProxyBtn.disabled = false; }
+          if (saveDomainBtn) { saveDomainBtn.innerText = '保存配置'; saveDomainBtn.disabled = false; }
         }
 
         function addUser() { document.getElementById('addBtn').disabled=true; api('/api/admin/add', { name: document.getElementById('name').value, expiryDate: document.getElementById('expiryDate').value, uuids: document.getElementById('uuids').value }); }
@@ -2205,7 +2454,12 @@ async function handleAdminPanel(request, env, adminPath) {
           
           // 更新菜单状态
           document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
-          event.currentTarget.classList.add('active');
+          // 通过data属性找到对应的菜单项并激活
+          document.querySelectorAll('.menu-item').forEach(item => {
+            if(item.getAttribute('data-section') === sectionName) {
+              item.classList.add('active');
+            }
+          });
           
           // 保存当前标签到localStorage
           localStorage.setItem('adminCurrentSection', sectionName);
@@ -2213,6 +2467,7 @@ async function handleAdminPanel(request, env, adminPath) {
           // 加载对应数据
           if(sectionName === 'plans') loadPlans();
           if(sectionName === 'orders') loadOrders();
+          if(sectionName === 'announcement') loadAnnouncements();
           
           // 移动端切换页面时关闭侧边栏
           if (window.innerWidth <= 768) {
@@ -2277,21 +2532,25 @@ async function handleAdminPanel(request, env, adminPath) {
               var p = data.plans[i];
               var name = escapeHtml(p.name);
               var desc = escapeHtml(p.description || '\u65e0\u63cf\u8ff0');
-              var bgColor = p.enabled ? '#52c41a' : '#ccc';
-              var statusText = p.enabled ? '\u542f\u7528' : '\u7981\u7528';
-              var btnText = p.enabled ? '\u7981\u7528' : '\u542f\u7528';
+              var bgColor = p.enabled ? '#52c41a' : '#ff9500';
+              var statusText = p.enabled ? '\u5df2\u4e0a\u67b6' : '\u5df2\u4e0b\u67b6';
+              var btnText = p.enabled ? '\u4e0b\u67b6' : '\u4e0a\u67b6';
+              var btnColor = p.enabled ? '#ff9500' : '#52c41a';
               var enabledNum = p.enabled ? 1 : 0;
               
-              html += '<div class="user-row" style="padding:15px;margin-bottom:10px;">';
+              html += '<div class="user-row" style="padding:15px;margin-bottom:10px;" data-plan-id="' + p.id + '" data-plan-name="' + escapeHtml(p.name) + '" data-plan-duration="' + p.duration_days + '" data-plan-desc="' + escapeHtml(p.description || '') + '" data-plan-price="' + (p.price || 0) + '">';
               html += '<div style="flex:1;">';
-              html += '<strong>' + name + '</strong>';
+              html += '<strong style="font-size:16px;">' + name + '</strong>';
               html += '<p style="color:#666;font-size:13px;margin:5px 0;">' + desc + '</p>';
+              html += '<div style="margin-top:8px;">';
               html += '<span class="badge" style="background:' + bgColor + ';">' + statusText + '</span>';
               html += '<span class="badge" style="background:#1890ff;margin-left:5px;">' + p.duration_days + '\u5929</span>';
-              html += '<span style="margin-left:10px;font-size:14px;color:#666;">\uffe5' + (p.price || 0) + '</span>';
+              html += '<span style="margin-left:10px;font-size:15px;color:#ff4d4f;font-weight:600;">\uffe5' + (p.price || 0) + '</span>';
+              html += '</div>';
               html += '</div>';
               html += '<div class="user-actions">';
-              html += '<button onclick="togglePlan(' + p.id + ', ' + enabledNum + ')" class="btn-primary" style="padding:5px 12px;">' + btnText + '</button>';
+              html += '<button onclick="openPlanEditFromRow(this)" class="btn-primary" style="padding:5px 12px;background:#faad14;">\u7f16\u8f91</button>';
+              html += '<button onclick="togglePlan(' + p.id + ', ' + enabledNum + ')" class="btn-primary" style="padding:5px 12px;background:' + btnColor + ';">' + btnText + '</button>';
               html += '<button onclick="deletePlan(' + p.id + ')" class="btn-primary" style="padding:5px 12px;background:#ff4d4f;">\u5220\u9664</button>';
               html += '</div>';
               html += '</div>';
@@ -2370,6 +2629,75 @@ async function handleAdminPanel(request, env, adminPath) {
             }
           } catch(e) {
             alert('删除失败: ' + e.message);
+          }
+        }
+        
+        // 套餐编辑功能
+        function openPlanEdit(id, name, duration, description, price) {
+          document.getElementById('editPlanId').value = id;
+          document.getElementById('editPlanName').value = name;
+          document.getElementById('editPlanDuration').value = duration;
+          document.getElementById('editPlanDescription').value = description;
+          document.getElementById('editPlanPrice').value = price;
+          document.getElementById('editPlanModal').style.display = 'flex';
+        }
+        
+        // 从按钮的父元素中读取套餐数据
+        function openPlanEditFromRow(button) {
+          const row = button.closest('[data-plan-id]');
+          if (!row) return;
+          
+          const id = row.getAttribute('data-plan-id');
+          const name = row.getAttribute('data-plan-name');
+          const duration = row.getAttribute('data-plan-duration');
+          const desc = row.getAttribute('data-plan-desc');
+          const price = row.getAttribute('data-plan-price');
+          
+          openPlanEdit(id, name, duration, desc, price);
+        }
+        
+        function closePlanEdit() {
+          document.getElementById('editPlanModal').style.display = 'none';
+        }
+        
+        async function savePlanEdit() {
+          const id = document.getElementById('editPlanId').value;
+          const name = document.getElementById('editPlanName').value.trim();
+          const duration = parseInt(document.getElementById('editPlanDuration').value);
+          const description = document.getElementById('editPlanDescription').value.trim();
+          const price = parseFloat(document.getElementById('editPlanPrice').value) || 0;
+          
+          if(!name || !duration || duration <= 0) {
+            alert('请填写套餐名称和有效时长');
+            return;
+          }
+          
+          const btn = document.getElementById('editPlanSaveBtn');
+          btn.disabled = true;
+          btn.innerText = '保存中...';
+          
+          const form = new FormData();
+          form.append('id', id);
+          form.append('name', name);
+          form.append('duration_days', duration);
+          form.append('description', description);
+          form.append('price', price);
+          
+          try {
+            const res = await fetch('/api/admin/plans/update', { method: 'POST', body: form });
+            const result = await res.json();
+            if(res.ok && result.success) {
+              toast('✅ 套餐更新成功');
+              closePlanEdit();
+              loadPlans();
+            } else {
+              alert('更新失败: ' + result.error);
+            }
+          } catch(e) {
+            alert('更新失败: ' + e.message);
+          } finally {
+            btn.disabled = false;
+            btn.innerText = '保存';
           }
         }
         
@@ -2522,6 +2850,16 @@ async function handleAdminPanel(request, env, adminPath) {
           document.getElementById('adminOldPassword').value = '';
           document.getElementById('adminNewPassword').value = '';
           document.getElementById('adminConfirmPassword').value = '';
+        }
+        
+        // 移动端侧边栏切换
+        function toggleAdminSidebar() {
+          var sidebar = document.getElementById('admin-sidebar');
+          var overlay = document.querySelector('.admin-sidebar-overlay');
+          if(sidebar && overlay) {
+            sidebar.classList.toggle('mobile-open');
+            overlay.classList.toggle('show');
+          }
         }
         
         // 初始化渲染
@@ -3622,6 +3960,9 @@ async function renderUserDashboard(env, userInfo) {
             <div id="section-account" class="section active">
                 <div class="content-header">
                     <h2>📊 账号信息</h2>
+                    <button onclick="viewAllAnnouncements()" style="padding:8px 16px;background:#1890ff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:6px;">
+                        📢 查看公告
+                    </button>
                 </div>
                 <div class="content-body">
                     <div class="card">
@@ -4184,6 +4525,176 @@ async function renderUserDashboard(env, userInfo) {
             document.getElementById('newPassword').value = '';
             document.getElementById('confirmPassword').value = '';
         }
+        
+        // 手动查看所有公告
+        async function viewAllAnnouncements() {
+            try {
+                const res = await fetch('/api/announcement');
+                const data = await res.json();
+                
+                if (!data.success || !data.announcements || data.announcements.length === 0) {
+                    showToast('📢 暂无公告');
+                    return;
+                }
+                
+                // 显示公告列表选择器
+                showAnnouncementList(data.announcements);
+            } catch(e) {
+                showToast('❌ 加载公告失败');
+            }
+        }
+        
+        // 显示公告列表选择界面
+        function showAnnouncementList(announcements) {
+            const overlay = document.createElement('div');
+            overlay.id = 'announcementListOverlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;justify-content:center;align-items:center;';
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = 'background:white;border-radius:12px;max-width:600px;width:90%;max-height:70vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+            
+            const header = document.createElement('div');
+            header.style.cssText = 'padding:20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;';
+            header.innerHTML = '<h3 style="margin:0;font-size:18px;color:#1890ff;">📢 系统公告列表</h3>';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '✕';
+            closeBtn.style.cssText = 'background:none;border:none;font-size:24px;color:#999;cursor:pointer;padding:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:4px;';
+            closeBtn.onmouseover = function() { this.style.background = '#f0f0f0'; this.style.color = '#333'; };
+            closeBtn.onmouseout = function() { this.style.background = 'none'; this.style.color = '#999'; };
+            closeBtn.onclick = function() { document.body.removeChild(overlay); };
+            header.appendChild(closeBtn);
+            
+            const body = document.createElement('div');
+            body.style.cssText = 'padding:0;overflow-y:auto;flex:1;';
+            
+            announcements.forEach((ann, index) => {
+                const item = document.createElement('div');
+                item.style.cssText = 'padding:15px 20px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background 0.2s;';
+                item.onmouseover = function() { this.style.background = '#f9f9f9'; };
+                item.onmouseout = function() { this.style.background = 'white'; };
+                item.onclick = function() {
+                    document.body.removeChild(overlay);
+                    showAnnouncementModal(ann.id, ann.title, ann.content, true);
+                };
+                
+                const title = document.createElement('div');
+                title.style.cssText = 'font-size:16px;font-weight:500;color:#333;margin-bottom:5px;';
+                title.textContent = ann.title;
+                
+                const time = document.createElement('div');
+                time.style.cssText = 'font-size:12px;color:#999;';
+                time.textContent = new Date(ann.created_at).toLocaleString('zh-CN');
+                
+                item.appendChild(title);
+                item.appendChild(time);
+                body.appendChild(item);
+            });
+            
+            modal.appendChild(header);
+            modal.appendChild(body);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+        
+        // 公告功能
+        async function loadAndShowAnnouncement() {
+            try {
+                const res = await fetch('/api/announcement');
+                const data = await res.json();
+                
+                if (!data.success || !data.announcements || data.announcements.length === 0) return;
+                
+                // 获取本次登录已经dismissed的公告ID列表(使用sessionStorage)
+                const dismissedIds = JSON.parse(sessionStorage.getItem('dismissed_announcements') || '[]');
+                
+                // 过滤出未被dismiss的公告
+                const unreadAnnouncements = data.announcements.filter(ann => !dismissedIds.includes(ann.id));
+                
+                if (unreadAnnouncements.length === 0) return;
+                
+                // 显示第一个未读公告
+                const announcement = unreadAnnouncements[0];
+                showAnnouncementModal(announcement.id, announcement.title, announcement.content);
+            } catch(e) {
+                console.error('加载公告失败:', e);
+            }
+        }
+        
+        function showAnnouncementModal(id, title, content, isManualView = false) {
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.id = 'announcementOverlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;justify-content:center;align-items:center;';
+            
+            // 创建弹窗
+            const modal = document.createElement('div');
+            modal.style.cssText = 'background:white;border-radius:12px;max-width:500px;width:90%;max-height:70vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+            
+            // 标题栏
+            const header = document.createElement('div');
+            header.style.cssText = 'padding:20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;';
+            header.innerHTML = '<h3 style="margin:0;font-size:18px;color:#1890ff;">📢 ' + (title || '系统公告') + '</h3>';
+            
+            // 关闭按钮
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '✕';
+            closeBtn.style.cssText = 'background:none;border:none;font-size:24px;color:#999;cursor:pointer;padding:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:4px;';
+            closeBtn.onmouseover = function() { this.style.background = '#f0f0f0'; this.style.color = '#333'; };
+            closeBtn.onmouseout = function() { this.style.background = 'none'; this.style.color = '#999'; };
+            closeBtn.onclick = function() { document.body.removeChild(overlay); };
+            header.appendChild(closeBtn);
+            
+            // 内容区域
+            const body = document.createElement('div');
+            body.style.cssText = 'padding:20px;overflow-y:auto;flex:1;line-height:1.8;color:#333;white-space:pre-wrap;word-wrap:break-word;';
+            body.textContent = content || '暂无公告内容';
+            
+            // 底部按钮区
+            const footer = document.createElement('div');
+            footer.style.cssText = 'padding:15px 20px;border-top:1px solid #f0f0f0;display:flex;gap:10px;justify-content:flex-end;';
+            
+            // 手动查看时不显示"不再提醒"按钮
+            if (!isManualView) {
+                const dismissBtn = document.createElement('button');
+                dismissBtn.textContent = '本次登录不再提醒';
+                dismissBtn.style.cssText = 'padding:8px 20px;background:#f5f5f5;color:#666;border:1px solid #d9d9d9;border-radius:6px;cursor:pointer;font-size:14px;';
+                dismissBtn.onclick = function() {
+                    // 将此公告ID添加到session级别的已dismiss列表
+                    const dismissedIds = JSON.parse(sessionStorage.getItem('dismissed_announcements') || '[]');
+                    if (!dismissedIds.includes(id)) {
+                        dismissedIds.push(id);
+                        sessionStorage.setItem('dismissed_announcements', JSON.stringify(dismissedIds));
+                    }
+                    document.body.removeChild(overlay);
+                    showToast('✅ 本次登录不再提醒此公告');
+                };
+                footer.appendChild(dismissBtn);
+            }
+            
+            const closeBtn2 = document.createElement('button');
+            closeBtn2.textContent = isManualView ? '关闭' : '我知道了';
+            closeBtn2.style.cssText = 'padding:8px 20px;background:#1890ff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;';
+            closeBtn2.onclick = function() { 
+                document.body.removeChild(overlay);
+            };
+            
+            footer.appendChild(closeBtn2);
+            
+            // 组装弹窗
+            modal.appendChild(header);
+            modal.appendChild(body);
+            modal.appendChild(footer);
+            overlay.appendChild(modal);
+            
+            // 添加到页面
+            document.body.appendChild(overlay);
+        }
+        
+        // 页面加载完成后检查公告
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(loadAndShowAnnouncement, 500); // 延迟500ms显示，确保页面加载完成
+        });
     </script>
 </body>
 </html>`, {
@@ -4654,6 +5165,206 @@ async function handleAdminCheck(request, env) {
         status: 200, 
         headers: { 'Content-Type': 'application/json; charset=utf-8' } 
     });
+}
+
+// 获取公告 API (用户端)
+async function handleGetAnnouncement(request, env) {
+    try {
+        // 获取所有启用的公告
+        const { results } = await env.DB.prepare(
+            "SELECT * FROM announcements WHERE enabled = 1 ORDER BY created_at DESC"
+        ).all();
+        
+        return new Response(JSON.stringify({
+            success: true,
+            announcements: results || []
+        }), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    }
+}
+
+// 管理员获取所有公告
+async function handleAdminGetAnnouncements(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const { results } = await env.DB.prepare(
+            "SELECT * FROM announcements ORDER BY created_at DESC"
+        ).all();
+        
+        return new Response(JSON.stringify({ 
+            success: true, 
+            announcements: results || [] 
+        }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    }
+}
+
+// 管理员获取单个公告
+async function handleAdminGetAnnouncement(request, env, id) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const result = await env.DB.prepare(
+            "SELECT * FROM announcements WHERE id = ?"
+        ).bind(id).first();
+        
+        if (!result) {
+            return new Response(JSON.stringify({ success: false, error: '公告不存在' }), {
+                status: 404,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+            });
+        }
+        
+        return new Response(JSON.stringify({ 
+            success: true, 
+            announcement: result 
+        }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    }
+}
+
+// 管理员创建公告
+async function handleAdminCreateAnnouncement(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const title = formData.get('title');
+        const content = formData.get('content');
+        const enabled = formData.get('enabled') === '1' ? 1 : 0;
+        
+        if (!title || !content) {
+            return new Response(JSON.stringify({ success: false, error: '标题和内容不能为空' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+            });
+        }
+        
+        const now = Date.now();
+        await env.DB.prepare(
+            "INSERT INTO announcements (title, content, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+        ).bind(title, content, enabled, now, now).run();
+        
+        return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    }
+}
+
+// 管理员更新公告
+async function handleAdminUpdateAnnouncement(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const id = formData.get('id');
+        const title = formData.get('title');
+        const content = formData.get('content');
+        const enabled = formData.get('enabled') === '1' ? 1 : 0;
+        
+        if (!id || !title || !content) {
+            return new Response(JSON.stringify({ success: false, error: '参数不完整' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+            });
+        }
+        
+        const now = Date.now();
+        await env.DB.prepare(
+            "UPDATE announcements SET title = ?, content = ?, enabled = ?, updated_at = ? WHERE id = ?"
+        ).bind(title, content, enabled, now, id).run();
+        
+        return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    }
+}
+
+// 管理员删除公告
+async function handleAdminDeleteAnnouncement(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const id = formData.get('id');
+        
+        if (!id) {
+            return new Response(JSON.stringify({ success: false, error: '缺少ID' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+            });
+        }
+        
+        await env.DB.prepare("DELETE FROM announcements WHERE id = ?").bind(id).run();
+        
+        return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+    }
 }
 
 // 管理员获取订单列表

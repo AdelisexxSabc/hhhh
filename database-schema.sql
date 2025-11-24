@@ -64,4 +64,13 @@ CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 
+CREATE TABLE IF NOT EXISTS announcements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
 ALTER TABLE user_accounts ADD COLUMN auto_approve_version INTEGER DEFAULT 0;
