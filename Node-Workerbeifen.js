@@ -248,7 +248,19 @@ function generateVlessLinks(workerDomain, uuid, userName) {
     const protocol = 'vless';
     const domains = cachedData.settings.bestDomains || FALLBACK_CONFIG.bestDomains;
     
-    domains.forEach((item, index) => {
+    // 排序: 只将 IPv6 IP 地址排到后面，手动添加的域名保持原位
+    const sortedDomains = [...domains].sort((a, b) => {
+        // 检测是否是 IPv6 IP 地址 (包含方括号 [ 的是 IPv6 IP)
+        const isV6IpA = a.includes('[');
+        const isV6IpB = b.includes('[');
+        
+        // 只对 IPv6 IP 地址进行排序，域名保持原位
+        if (isV6IpA && !isV6IpB) return 1;  // a是IPv6 IP, b不是, a排后面
+        if (!isV6IpA && isV6IpB) return -1; // a不是IPv6 IP, b是, a排前面
+        return 0; // 其他情况保持原顺序
+    });
+    
+    sortedDomains.forEach((item, index) => {
         // 支持格式:
         // 1. domain:port#节点名
         // 2. domain#节点名 (默认端口 443)
@@ -298,19 +310,14 @@ function generateVlessLinks(workerDomain, uuid, userName) {
             }
         }
         
-        // 生成节点名称（不显示"未命名"前缀）
+        // 生成节点名称(直接使用域名/IP或自定义别名,不添加用户名前缀)
         let nodeName;
         if (customAlias) {
             // 使用自定义别名
             nodeName = customAlias;
         } else {
-            // 使用地址（去掉端口）作为节点名
+            // 使用地址(去掉端口)作为节点名
             nodeName = addressPart.replace(/:\d+$/, '');
-        }
-        
-        // 只有当用户名不是"未命名"时才添加前缀
-        if (userName && userName !== '未命名' && userName.trim() !== '') {
-            nodeName = `${userName}-${nodeName}`;
         }
         
         // 构建 VLESS 参数

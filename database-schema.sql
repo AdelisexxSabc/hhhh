@@ -74,3 +74,40 @@ CREATE TABLE IF NOT EXISTS announcements (
 );
 
 ALTER TABLE user_accounts ADD COLUMN auto_approve_version INTEGER DEFAULT 0;
+
+
+CREATE TABLE IF NOT EXISTS payment_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    code TEXT UNIQUE NOT NULL,
+    api_url TEXT NOT NULL,
+    api_token TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
+
+-- 支付记录表 (用于管理端)
+CREATE TABLE IF NOT EXISTS payment_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT UNIQUE NOT NULL,
+    trade_id TEXT,
+    amount REAL NOT NULL,
+    actual_amount TEXT,
+    trade_type TEXT,
+    user_id TEXT,
+    status INTEGER DEFAULT 1,
+    payment_url TEXT,
+    token TEXT,
+    block_transaction_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_records_order_id ON payment_records(order_id);
+CREATE INDEX IF NOT EXISTS idx_payment_records_trade_id ON payment_records(trade_id);
+CREATE INDEX IF NOT EXISTS idx_payment_records_status ON payment_records(status);
+
+-- 订单表添加支付相关字段
+ALTER TABLE orders ADD COLUMN payment_order_id TEXT;
+ALTER TABLE orders ADD COLUMN payment_trade_id TEXT;
+ALTER TABLE orders ADD COLUMN payment_type TEXT DEFAULT 'manual';

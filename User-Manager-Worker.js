@@ -93,6 +93,13 @@ export default {
       // 订单管理
       if (path === '/api/admin/orders/approve') return await handleAdminApproveOrder(request, env);
       if (path === '/api/admin/orders/reject') return await handleAdminRejectOrder(request, env);
+      // 支付通道管理
+      if (path === '/api/admin/payment/channels/save') return await handleAdminSavePaymentChannel(request, env);
+      if (path === '/api/admin/payment/channels/delete') return await handleAdminDeletePaymentChannel(request, env);
+      if (path === '/api/admin/payment/channels/toggle') return await handleAdminTogglePaymentChannel(request, env);
+      if (path === '/api/admin/payment/channels/update') return await handleAdminUpdatePaymentChannel(request, env);
+      // 支付回调
+      if (path === '/api/payment/notify') return await handlePaymentNotify(request, env);
     }
     
     // 4. 用户套餐和订单 API
@@ -107,12 +114,16 @@ export default {
         const id = path.split('/').pop();
         if (id && !isNaN(id)) return await handleAdminGetAnnouncement(request, env, id);
       }
+      // 支付通道
+      if (path === '/api/admin/payment/channels') return await handleAdminGetPaymentChannels(request, env);
+      if (path === '/api/payment/channels') return await handleGetPaymentChannels(request, env);
     }
     if (request.method === 'GET') {
       if (path === '/api/user/orders') return await handleUserGetOrders(request, env);
     }
     if (request.method === 'POST') {
       if (path === '/api/user/orders/create') return await handleUserCreateOrder(request, env);
+      if (path === '/api/user/orders/pay') return await handleUserPayOrder(request, env);
       if (path === '/api/user/checkin') return await handleUserCheckin(request, env);
     }
 
@@ -138,11 +149,16 @@ async function dbGetActiveUsers(env) {
     const now = Date.now();
     // SQL: 选出 (启用=1) 且 (不过期 或 过期时间>现在) 的用户
     const { results } = await env.DB.prepare(
-        "SELECT uuid, name FROM users WHERE enabled = 1 AND (expiry IS NULL OR expiry > ?)"
+        "SELECT uuid, name, expiry FROM users WHERE enabled = 1 AND (expiry IS NULL OR expiry > ?)"
     ).bind(now).all();
     
     const users = {};
-    results.forEach(r => users[r.uuid] = r.name);
+    results.forEach(r => {
+        users[r.uuid] = {
+            name: r.name,
+            expiry: r.expiry || null
+        };
+    });
     return users;
 }
 
@@ -1246,6 +1262,14 @@ async function handleAdminUpdateSystemSettings(request, env) {
     }
   }
   
+  // 更新订单过期时间设置
+  if (formData.has('pendingOrderExpiry')) {
+    currentSettings.pendingOrderExpiry = parseInt(formData.get('pendingOrderExpiry')) || 0;
+  }
+  if (formData.has('paymentOrderExpiry')) {
+    currentSettings.paymentOrderExpiry = parseInt(formData.get('paymentOrderExpiry')) || 15;
+  }
+  
   // 更新公告设置
   if (formData.has('announcementTitle') || formData.has('announcementContent')) {
     currentSettings.announcementTitle = formData.get('announcementTitle') || '';
@@ -1612,6 +1636,10 @@ async function handleAdminPanel(request, env, adminPath) {
               <span class="menu-item-icon">💳</span>
               <span>订单管理</span>
             </li>
+            <li class="menu-item" data-section="payment" onclick="switchSection('payment')">
+              <span class="menu-item-icon">💰</span>
+              <span>支付通道</span>
+            </li>
             <li class="menu-item" data-section="change-password" onclick="switchSection('change-password')">
               <span class="menu-item-icon">🔒</span>
               <span>修改密码</span>
@@ -1644,7 +1672,7 @@ async function handleAdminPanel(request, env, adminPath) {
                     </div>
                   </label>
                 </div>
-                <div style="padding:15px;background:#fff7e6;border-radius:8px;margin-bottom:20px;">
+                <div style="padding:15px;background:#fff7e6;border-radius:8px;margin-bottom:15px;">
                   <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
                     <div>
                       <span style="font-weight:600;display:block;margin-bottom:4px;">自动审核订单</span>
@@ -1657,6 +1685,37 @@ async function handleAdminPanel(request, env, adminPath) {
                       <span class="slider" style="background:${settings.autoApproveOrder ? '#52c41a' : '#d9d9d9'};"></span>
                     </div>
                   </label>
+                </div>
+                <div style="padding:15px;background:#f0f5ff;border-radius:8px;margin-bottom:15px;">
+                  <div style="margin-bottom:12px;">
+                    <span style="font-weight:600;display:block;margin-bottom:4px;">⏱️ 订单过期时间设置</span>
+                    <div style="font-size:13px;color:#666;">设置待审核订单和支付订单的自动过期时间</div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                    <div>
+                      <label style="font-size:13px;color:#666;display:block;margin-bottom:5px;">待审核订单过期时间</label>
+                      <select id="pendingOrderExpiry" onchange="updateSystemSettings()" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px;">
+                        <option value="0" ${!settings.pendingOrderExpiry || settings.pendingOrderExpiry == 0 ? 'selected' : ''}>永不过期</option>
+                        <option value="30" ${settings.pendingOrderExpiry == 30 ? 'selected' : ''}>30分钟</option>
+                        <option value="60" ${settings.pendingOrderExpiry == 60 ? 'selected' : ''}>1小时</option>
+                        <option value="120" ${settings.pendingOrderExpiry == 120 ? 'selected' : ''}>2小时</option>
+                        <option value="360" ${settings.pendingOrderExpiry == 360 ? 'selected' : ''}>6小时</option>
+                        <option value="720" ${settings.pendingOrderExpiry == 720 ? 'selected' : ''}>12小时</option>
+                        <option value="1440" ${settings.pendingOrderExpiry == 1440 ? 'selected' : ''}>24小时</option>
+                        <option value="4320" ${settings.pendingOrderExpiry == 4320 ? 'selected' : ''}>3天</option>
+                        <option value="10080" ${settings.pendingOrderExpiry == 10080 ? 'selected' : ''}>7天</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="font-size:13px;color:#666;display:block;margin-bottom:5px;">支付订单过期时间</label>
+                      <select id="paymentOrderExpiry" onchange="updateSystemSettings()" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px;">
+                        <option value="15" ${!settings.paymentOrderExpiry || settings.paymentOrderExpiry == 15 ? 'selected' : ''}>15分钟</option>
+                        <option value="30" ${settings.paymentOrderExpiry == 30 ? 'selected' : ''}>30分钟</option>
+                        <option value="60" ${settings.paymentOrderExpiry == 60 ? 'selected' : ''}>1小时</option>
+                        <option value="120" ${settings.paymentOrderExpiry == 120 ? 'selected' : ''}>2小时</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="card">
@@ -1844,8 +1903,69 @@ async function handleAdminPanel(request, env, adminPath) {
             </div>
             <div class="content-body">
               <div class="card">
-                <h3 style="margin-bottom:15px;">待审核订单</h3>
+                <div style="margin-bottom:15px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                  <div style="display:flex;align-items:center;gap:15px;">
+                    <h3 style="margin:0;">订单列表</h3>
+                    <select id="orderStatusFilter" onchange="loadOrders()" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:4px;">
+                      <option value="all">全部订单</option>
+                      <option value="pending" selected>待审核</option>
+                    <option value="approved">已通过</option>
+                    <option value="rejected">已拒绝</option>
+                    <option value="expired">已过期</option>
+                  </select>
+                  </div>
+                  <div id="orderBatchBar" style="display:none;align-items:center;gap:10px;">
+                    <span>已选 <b id="orderSelCount">0</b> 个订单：</span>
+                    <button onclick="batchOrderAction('approve')" class="btn-action" style="background:#52c41a;">批量通过</button>
+                    <button onclick="batchOrderAction('reject')" class="btn-action btn-del">批量拒绝</button>
+                  </div>
+                </div>
                 <div id="ordersList"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 支付通道配置 -->
+          <div id="section-payment" class="section">
+            <div class="content-header">
+              <h2>💰 支付通道配置</h2>
+            </div>
+            <div class="content-body">
+              <div class="card">
+                <div style="margin-bottom:20px;padding:15px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:8px;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span style="font-size:16px;">ℹ️</span>
+                    <strong style="color:#0050b3;">BEpusdt 对接说明</strong>
+                  </div>
+                  <div style="color:#096dd9;line-height:1.6;font-size:14px;">
+                    <p style="margin:5px 0;">• 支持对接 <a href="https://github.com/v03413/BEpusdt" target="_blank" style="color:#1890ff;">BEpusdt</a> USDT 收款网关</p>
+                    <p style="margin:5px 0;">• API 地址填写 BEpusdt 服务地址 (如: https://epusdt.example.com)</p>
+                    <p style="margin:5px 0;">• API Token 在 BEpusdt 的 conf.toml 中配置</p>
+                    <p style="margin:5px 0;">• 支持多种交易类型: usdt.trc20, usdt.polygon, usdt.arbitrum 等</p>
+                  </div>
+                </div>
+                
+                <h3 style="margin-bottom:15px;">添加支付通道</h3>
+                <div class="grid">
+                  <div><label>通道名称</label><input type="text" id="payChannelName" placeholder="例如：USDT-TRC20"></div>
+                  <div><label>通道代码</label><input type="text" id="payChannelCode" placeholder="例如：usdt.trc20"></div>
+                </div>
+                <div style="margin-top:10px;">
+                  <label>API 地址</label>
+                  <input type="text" id="payChannelApiUrl" placeholder="BEpusdt 服务地址，例如：https://epusdt.example.com">
+                </div>
+                <div style="margin-top:10px;">
+                  <label>API Token</label>
+                  <input type="password" id="payChannelApiToken" placeholder="BEpusdt API 认证令牌">
+                </div>
+                <div style="margin-top:15px;">
+                  <button onclick="savePaymentChannel()" class="btn-primary">添加通道</button>
+                </div>
+              </div>
+              
+              <div class="card">
+                <h3 style="margin-bottom:15px;">支付通道列表</h3>
+                <div id="paymentChannelsList"></div>
               </div>
             </div>
           </div>
@@ -2195,9 +2315,13 @@ async function handleAdminPanel(request, env, adminPath) {
         async function updateSystemSettings() {
           const enableRegister = document.getElementById('enableRegisterCheck').checked;
           const autoApproveOrder = document.getElementById('autoApproveOrderCheck').checked;
+          const pendingOrderExpiry = document.getElementById('pendingOrderExpiry').value;
+          const paymentOrderExpiry = document.getElementById('paymentOrderExpiry').value;
           const fd = new FormData();
           fd.append('enableRegister', enableRegister);
           fd.append('autoApproveOrder', autoApproveOrder);
+          fd.append('pendingOrderExpiry', pendingOrderExpiry);
+          fd.append('paymentOrderExpiry', paymentOrderExpiry);
           
           try {
             const res = await fetch('/api/admin/updateSystemSettings', { method: 'POST', body: fd });
@@ -2523,6 +2647,7 @@ async function handleAdminPanel(request, env, adminPath) {
           if(sectionName === 'plans') loadPlans();
           if(sectionName === 'orders') loadOrders();
           if(sectionName === 'announcement') loadAnnouncements();
+          if(sectionName === 'payment') loadPaymentChannels();
           
           // 移动端切换页面时关闭侧边栏
           if (window.innerWidth <= 768) {
@@ -2557,6 +2682,7 @@ async function handleAdminPanel(request, env, adminPath) {
               document.getElementById('section-' + lastSection).classList.add('active');
               if(lastSection === 'plans') loadPlans();
               if(lastSection === 'orders') loadOrders();
+              if(lastSection === 'payment') loadPaymentChannels();
             }
           } else {
             // 首次访问时清除可能存在的旧状态
@@ -2764,39 +2890,146 @@ async function handleAdminPanel(request, env, adminPath) {
             if(!data.success) return;
             
             const container = document.getElementById('ordersList');
-            const pendingOrders = data.orders.filter(o => o.status === 'pending');
+            const filterSelect = document.getElementById('orderStatusFilter');
+            const statusFilter = filterSelect ? filterSelect.value : 'pending';
             
-            if(pendingOrders.length === 0) {
-              container.innerHTML = '<p style="text-align:center;color:#999;">暂无待审核订单</p>';
+            // 根据状态筛选订单
+            let filteredOrders = data.orders;
+            if(statusFilter !== 'all') {
+              filteredOrders = data.orders.filter(o => o.status === statusFilter);
+            }
+            
+            // 隐藏批量操作栏
+            document.getElementById('orderBatchBar').style.display = 'none';
+            document.getElementById('orderSelCount').innerText = '0';
+            
+            if(filteredOrders.length === 0) {
+              const statusText = {'pending': '待审核', 'approved': '已通过', 'rejected': '已拒绝', 'expired': '已过期', 'all': ''}[statusFilter];
+              container.innerHTML = '<p style="text-align:center;color:#999;">暂无' + statusText + '订单</p>';
               return;
             }
             
-            var html = '';
-            for(var i = 0; i < pendingOrders.length; i++) {
-              var o = pendingOrders[i];
+            // 检查是否有待审核订单（只有待审核才显示复选框）
+            const hasPending = statusFilter === 'pending' || (statusFilter === 'all' && filteredOrders.some(o => o.status === 'pending'));
+            
+            var html = '<table style="width:100%;"><thead><tr>';
+            if(hasPending) {
+              html += '<th width="40"><input type="checkbox" id="orderSelectAll" onclick="toggleOrderSelectAll()"></th>';
+            }
+            html += '<th>ID</th><th>用户</th><th>套餐</th><th>金额</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+            
+            for(var i = 0; i < filteredOrders.length; i++) {
+              var o = filteredOrders[i];
               var username = escapeHtml(o.username);
               var planName = escapeHtml(o.plan_name);
               var createTime = formatBeijingDateTime(o.created_at);
-              var expiryTime = o.user_expiry ? formatBeijingDateTime(o.user_expiry) : '\u6c38\u4e45\u6709\u6548';
               
-              html += '<div class="user-row" style="padding:15px;margin-bottom:10px;">';
-              html += '<div style="flex:1;">';
-              html += '<strong>\u8ba2\u5355 #' + o.id + '</strong>';
-              html += '<p style="color:#666;font-size:13px;margin:5px 0;">\u7528\u6237\uff1a' + username + ' | \u5957\u9910\uff1a' + planName + ' (' + o.duration_days + '\u5929)</p>';
-              html += '<p style="color:#999;font-size:12px;">\u521b\u5efa\u65f6\u95f4\uff1a' + createTime + '</p>';
-              html += '<p style="color:#1890ff;font-size:12px;">\u8ba2\u9605\u5230\u671f\uff1a' + expiryTime + '</p>';
-              html += '<span class="badge" style="background:#faad14;">\u5f85\u5ba1\u6838</span>';
-              html += '</div>'
-              html += '<div class="user-actions">';
-              html += '<button onclick="approveOrder(' + o.id + ')" class="btn-primary" style="padding:5px 12px;background:#52c41a;">\u901a\u8fc7</button>';
-              html += '<button onclick="rejectOrder(' + o.id + ')" class="btn-primary" style="padding:5px 12px;background:#ff4d4f;">\u62d2\u7edd</button>';
-              html += '</div>';
-              html += '</div>';
+              var statusBadge = '';
+              var actions = '';
+              var checkbox = '';
+              
+              if(o.status === 'pending') {
+                statusBadge = '<span class="badge" style="background:#faad14;">待审核</span>';
+                if(o.expires_at) {
+                  var remaining = o.expires_at - Date.now();
+                  if(remaining > 0) {
+                    var mins = Math.floor(remaining / 60000);
+                    var hours = Math.floor(mins / 60);
+                    if(hours > 0) {
+                      statusBadge += ' <span style="color:#999;font-size:12px;">(' + hours + '小时后过期)</span>';
+                    } else {
+                      statusBadge += ' <span style="color:#ff4d4f;font-size:12px;">(' + mins + '分钟后过期)</span>';
+                    }
+                  }
+                }
+                checkbox = '<input type="checkbox" class="order-checkbox" value="' + o.id + '" onchange="updateOrderSelection()">';
+                actions = '<button onclick="approveOrder(' + o.id + ')" class="btn-action" style="background:#52c41a;">通过</button> ' +
+                          '<button onclick="rejectOrder(' + o.id + ')" class="btn-action btn-del">拒绝</button>';
+              } else if(o.status === 'approved') {
+                statusBadge = '<span class="badge" style="background:#52c41a;">已通过</span>';
+                actions = '<span style="color:#999;">-</span>';
+              } else if(o.status === 'rejected') {
+                statusBadge = '<span class="badge" style="background:#ff4d4f;">已拒绝</span>';
+                actions = '<span style="color:#999;">-</span>';
+              } else if(o.status === 'expired') {
+                statusBadge = '<span class="badge" style="background:#999;">已过期</span>';
+                actions = '<span style="color:#999;">-</span>';
+              }
+              
+              html += '<tr>';
+              if(hasPending) {
+                html += '<td>' + checkbox + '</td>';
+              }
+              html += '<td>#' + o.id + '</td>';
+              html += '<td>' + username + '</td>';
+              html += '<td>' + planName + ' (' + o.duration_days + '天)</td>';
+              html += '<td>¥' + (o.amount || 0) + '</td>';
+              html += '<td>' + createTime + '</td>';
+              html += '<td>' + statusBadge + '</td>';
+              html += '<td>' + actions + '</td>';
+              html += '</tr>';
             }
+            html += '</tbody></table>';
             container.innerHTML = html;
           } catch(e) {
             console.error('加载订单失败:', e);
           }
+        }
+        
+        function toggleOrderSelectAll() {
+          const selectAll = document.getElementById('orderSelectAll');
+          const checkboxes = document.querySelectorAll('.order-checkbox');
+          checkboxes.forEach(cb => cb.checked = selectAll.checked);
+          updateOrderSelection();
+        }
+        
+        function updateOrderSelection() {
+          const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+          const count = checkboxes.length;
+          document.getElementById('orderSelCount').innerText = count;
+          document.getElementById('orderBatchBar').style.display = count > 0 ? 'flex' : 'none';
+          
+          // 更新全选框状态
+          const allCheckboxes = document.querySelectorAll('.order-checkbox');
+          const selectAll = document.getElementById('orderSelectAll');
+          if(selectAll) {
+            selectAll.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+          }
+        }
+        
+        async function batchOrderAction(action) {
+          const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+          if(checkboxes.length === 0) {
+            toast('请先选择订单');
+            return;
+          }
+          
+          const actionText = action === 'approve' ? '通过' : '拒绝';
+          if(!confirm('确定要批量' + actionText + ' ' + checkboxes.length + ' 个订单吗？')) return;
+          
+          const orderIds = Array.from(checkboxes).map(cb => cb.value);
+          let successCount = 0;
+          let failCount = 0;
+          
+          for(const orderId of orderIds) {
+            try {
+              const form = new FormData();
+              form.append('order_id', orderId);
+              const endpoint = action === 'approve' ? '/api/admin/orders/approve' : '/api/admin/orders/reject';
+              const res = await fetch(endpoint, { method: 'POST', body: form });
+              const result = await res.json();
+              if(res.ok && result.success) {
+                successCount++;
+              } else {
+                failCount++;
+              }
+            } catch(e) {
+              failCount++;
+            }
+          }
+          
+          toast('✅ 成功' + actionText + ' ' + successCount + ' 个' + (failCount > 0 ? '，失败 ' + failCount + ' 个' : ''));
+          loadOrders();
         }
         
         async function approveOrder(orderId) {
@@ -2836,6 +3069,177 @@ async function handleAdminPanel(request, env, adminPath) {
             }
           } catch(e) {
             alert('操作失败: ' + e.message);
+          }
+        }
+        
+        // ==================== 支付通道管理 ====================
+        
+        async function loadPaymentChannels() {
+          try {
+            const res = await fetch('/api/admin/payment/channels');
+            const data = await res.json();
+            
+            const container = document.getElementById('paymentChannelsList');
+            if(!data.success || !data.data || data.data.length === 0) {
+              container.innerHTML = '<p style="text-align:center;color:#999;">暂无支付通道，请添加</p>';
+              return;
+            }
+            
+            var html = '<table style="width:100%;"><thead><tr><th>ID</th><th>名称</th><th>代码</th><th>API 地址</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+            for(var i = 0; i < data.data.length; i++) {
+              var c = data.data[i];
+              var statusBadge = c.enabled ? '<span class="badge" style="background:#52c41a;">启用</span>' : '<span class="badge" style="background:#999;">禁用</span>';
+              var toggleBtn = c.enabled 
+                ? '<button onclick="togglePaymentChannel(' + c.id + ', false)" class="btn-action" style="background:#ff9500;">禁用</button>'
+                : '<button onclick="togglePaymentChannel(' + c.id + ', true)" class="btn-action" style="background:#52c41a;">启用</button>';
+              
+              html += '<tr>';
+              html += '<td>' + c.id + '</td>';
+              html += '<td>' + escapeHtml(c.name) + '</td>';
+              html += '<td><code>' + escapeHtml(c.code) + '</code></td>';
+              html += '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(c.api_url) + '</td>';
+              html += '<td>' + statusBadge + '</td>';
+              html += '<td>' + toggleBtn + ' <button onclick="editPaymentChannel(' + c.id + ', \\'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\\', \\'' + escapeHtml(c.code).replace(/'/g, "\\'") + '\\', \\'' + escapeHtml(c.api_url).replace(/'/g, "\\'") + '\\')" class="btn-action" style="background:#1890ff;">编辑</button> <button onclick="deletePaymentChannel(' + c.id + ')" class="btn-action btn-del">删除</button></td>';
+              html += '</tr>';
+            }
+            html += '</tbody></table>';
+            container.innerHTML = html;
+          } catch(e) {
+            console.error('加载支付通道失败:', e);
+          }
+        }
+        
+        async function savePaymentChannel() {
+          const name = document.getElementById('payChannelName').value.trim();
+          const code = document.getElementById('payChannelCode').value.trim();
+          const apiUrl = document.getElementById('payChannelApiUrl').value.trim();
+          const apiToken = document.getElementById('payChannelApiToken').value.trim();
+          
+          if(!name || !code || !apiUrl || !apiToken) {
+            alert('请填写所有字段');
+            return;
+          }
+          
+          const form = new FormData();
+          form.append('name', name);
+          form.append('code', code);
+          form.append('api_url', apiUrl);
+          form.append('api_token', apiToken);
+          
+          try {
+            const res = await fetch('/api/admin/payment/channels/save', { method: 'POST', body: form });
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+              toast('✅ 支付通道已添加');
+              document.getElementById('payChannelName').value = '';
+              document.getElementById('payChannelCode').value = '';
+              document.getElementById('payChannelApiUrl').value = '';
+              document.getElementById('payChannelApiToken').value = '';
+              loadPaymentChannels();
+            } else {
+              alert('添加失败: ' + (result.error || '未知错误'));
+            }
+          } catch(e) {
+            alert('添加失败: ' + e.message);
+          }
+        }
+        
+        async function togglePaymentChannel(id, enabled) {
+          const form = new FormData();
+          form.append('id', id);
+          form.append('enabled', enabled);
+          
+          try {
+            const res = await fetch('/api/admin/payment/channels/toggle', { method: 'POST', body: form });
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+              toast(enabled ? '✅ 已启用' : '✅ 已禁用');
+              loadPaymentChannels();
+            } else {
+              alert('操作失败');
+            }
+          } catch(e) {
+            alert('操作失败: ' + e.message);
+          }
+        }
+        
+        async function deletePaymentChannel(id) {
+          if(!confirm('确定删除此支付通道？')) return;
+          
+          const form = new FormData();
+          form.append('id', id);
+          
+          try {
+            const res = await fetch('/api/admin/payment/channels/delete', { method: 'POST', body: form });
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+              toast('✅ 已删除');
+              loadPaymentChannels();
+            } else {
+              alert('删除失败');
+            }
+          } catch(e) {
+            alert('删除失败: ' + e.message);
+          }
+        }
+        
+        // 编辑支付通道
+        function editPaymentChannel(id, name, code, apiUrl) {
+          var modal = document.createElement('div');
+          modal.id = 'editChannelModal';
+          modal.style = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;z-index:1000;';
+          modal.innerHTML = '<div style="background:white;padding:25px;border-radius:10px;width:90%;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.2);">' +
+            '<h3 style="margin:0 0 20px 0;">✏️ 编辑支付通道</h3>' +
+            '<div style="margin-bottom:15px;"><label style="display:block;margin-bottom:5px;font-weight:500;">通道名称</label><input type="text" id="editChannelName" value="' + name + '" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px;box-sizing:border-box;"></div>' +
+            '<div style="margin-bottom:15px;"><label style="display:block;margin-bottom:5px;font-weight:500;">通道代码</label><input type="text" id="editChannelCode" value="' + code + '" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px;box-sizing:border-box;"></div>' +
+            '<div style="margin-bottom:15px;"><label style="display:block;margin-bottom:5px;font-weight:500;">API 地址</label><input type="text" id="editChannelApiUrl" value="' + apiUrl + '" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px;box-sizing:border-box;"></div>' +
+            '<div style="margin-bottom:15px;"><label style="display:block;margin-bottom:5px;font-weight:500;">新 API Token (不修改请留空)</label><input type="password" id="editChannelApiToken" placeholder="留空则不修改" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px;box-sizing:border-box;"></div>' +
+            '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+            '<button onclick="closeEditChannelModal()" style="padding:8px 20px;background:#f0f0f0;border:none;border-radius:4px;cursor:pointer;">取消</button>' +
+            '<button onclick="saveEditChannel(' + id + ')" style="padding:8px 20px;background:#1890ff;color:white;border:none;border-radius:4px;cursor:pointer;">保存</button>' +
+            '</div></div>';
+          document.body.appendChild(modal);
+        }
+        
+        function closeEditChannelModal() {
+          var modal = document.getElementById('editChannelModal');
+          if(modal) modal.remove();
+        }
+        
+        async function saveEditChannel(id) {
+          const name = document.getElementById('editChannelName').value.trim();
+          const code = document.getElementById('editChannelCode').value.trim();
+          const apiUrl = document.getElementById('editChannelApiUrl').value.trim();
+          const apiToken = document.getElementById('editChannelApiToken').value.trim();
+          
+          if(!name || !code || !apiUrl) {
+            alert('名称、代码、API地址不能为空');
+            return;
+          }
+          
+          const form = new FormData();
+          form.append('id', id);
+          form.append('name', name);
+          form.append('code', code);
+          form.append('api_url', apiUrl);
+          if(apiToken) form.append('api_token', apiToken);
+          
+          try {
+            const res = await fetch('/api/admin/payment/channels/update', { method: 'POST', body: form });
+            const result = await res.json();
+            
+            if(res.ok && result.success) {
+              toast('✅ 修改成功');
+              closeEditChannelModal();
+              loadPaymentChannels();
+            } else {
+              alert('修改失败: ' + (result.error || '未知错误'));
+            }
+          } catch(e) {
+            alert('修改失败: ' + e.message);
           }
         }
         
@@ -3991,7 +4395,6 @@ async function renderUserDashboard(env, userInfo) {
                     ${new Date().toLocaleDateString('zh-CN')}
                 </div>
                 <button onclick="handleLogout()" style="margin-top:10px;width:100%;padding:8px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);border-radius:4px;cursor:pointer;font-size:13px;">🚪 退出登录</button>
-                <button id="adminEntryBtn" onclick="goToAdmin()" style="display:none;margin-top:8px;width:100%;padding:8px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;">🔑 管理员后台</button>
             </div>
             <ul class="menu">
                 <li class="menu-item active" onclick="switchSection('account', event)">
@@ -4301,13 +4704,6 @@ async function renderUserDashboard(env, userInfo) {
             document.getElementById('sub-dropdown-' + type).classList.remove('show');
         }
         
-        function goToAdmin() {
-            window.location.href = '${adminPath}';
-        }
-        
-        // 直接显示管理员后台入口，让所有用户都能看到
-        document.getElementById('adminEntryBtn').style.display = 'block';
-        
         // 点击页面其他地方关闭下拉菜单
         document.addEventListener('click', function() {
             document.querySelectorAll('.sub-dropdown').forEach(function(d) {
@@ -4502,21 +4898,30 @@ async function renderUserDashboard(env, userInfo) {
         
         async function loadUserPlans() {
             try {
-                const res = await fetch('/api/plans');
-                const data = await res.json();
-                if(!data.success) return;
+                // 同时加载套餐和支付通道
+                const [plansRes, channelsRes] = await Promise.all([
+                    fetch('/api/plans'),
+                    fetch('/api/payment/channels')
+                ]);
+                const plansData = await plansRes.json();
+                const channelsData = await channelsRes.json();
+                
+                if(!plansData.success) return;
                 
                 const container = document.getElementById('userPlansList');
                 if(!container) return;
                 
-                if(data.plans.length === 0) {
+                // 保存支付通道到全局
+                window.paymentChannels = channelsData.success ? channelsData.data : [];
+                
+                if(plansData.plans.length === 0) {
                     container.innerHTML = '<p style="text-align:center;color:#999;grid-column:1/-1;">\u6682\u65e0\u53ef\u8d2d\u4e70\u5957\u9910</p>';
                     return;
                 }
                 
                 var html = '';
-                for(var i = 0; i < data.plans.length; i++) {
-                    var p = data.plans[i];
+                for(var i = 0; i < plansData.plans.length; i++) {
+                    var p = plansData.plans[i];
                     html += '<div class="card" style="text-align:center;padding:25px;">';
                     html += '<h3 style="margin:0 0 10px 0;font-size:20px;color:#1890ff;">' + p.name + '</h3>';
                     html += '<p style="color:#666;font-size:14px;margin:10px 0;min-height:40px;">' + (p.description || '\u65e0\u63cf\u8ff0') + '</p>';
@@ -4524,8 +4929,8 @@ async function renderUserDashboard(env, userInfo) {
                     html += '<span style="font-size:32px;font-weight:bold;color:#1890ff;">' + p.duration_days + '</span>';
                     html += '<span style="font-size:16px;color:#999;">\u5929</span>';
                     html += '</div>';
-                    html += '<div style="margin:15px 0;color:#999;font-size:14px;">\uffe5' + (p.price || 0) + '</div>';
-                    html += '<button onclick="buyPlan(' + p.id + ')" data-plan-name="' + p.name.replace(/"/g, '&quot;') + '" class="copy-btn" style="width:100%;padding:10px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">\u7acb\u5373\u8ba2\u8d2d</button>';
+                    html += '<div style="margin:15px 0;color:#ff4d4f;font-size:20px;font-weight:600;">\uffe5' + (p.price || 0) + '</div>';
+                    html += '<button onclick="buyPlan(' + p.id + ', ' + (p.price || 0) + ')" data-plan-name="' + p.name.replace(/"/g, '&quot;') + '" class="copy-btn" style="width:100%;padding:10px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">\u7acb\u5373\u8ba2\u8d2d</button>';
                     html += '</div>';
                 }
                 container.innerHTML = html;
@@ -4534,24 +4939,132 @@ async function renderUserDashboard(env, userInfo) {
             }
         }
         
-        async function buyPlan(planId) {
+        async function buyPlan(planId, price) {
             const planName = event.target.getAttribute('data-plan-name');
-            if(!confirm('\u786e\u5b9a\u8981\u8ba2\u8d2d\u5957\u9910\u300c' + planName + '\u300d\u5417\uff1f\\n\u8ba2\u5355\u63d0\u4ea4\u540e\u9700\u7b49\u5f85\u7ba1\u7406\u5458\u5ba1\u6838\u901a\u8fc7\u3002')) return;
+            const channels = window.paymentChannels || [];
             
-            const form = new FormData();
-            form.append('plan_id', planId);
+            // 如果没有配置支付通道或价格为0，使用旧的流程
+            if(channels.length === 0 || price === 0) {
+                if(!confirm('\u786e\u5b9a\u8981\u8ba2\u8d2d\u5957\u9910\u300c' + planName + '\u300d\u5417\uff1f\\n\u8ba2\u5355\u63d0\u4ea4\u540e\u9700\u7b49\u5f85\u7ba1\u7406\u5458\u5ba1\u6838\u901a\u8fc7\u3002')) return;
+                
+                const form = new FormData();
+                form.append('plan_id', planId);
+                
+                try {
+                    const res = await fetch('/api/user/orders/create', { method: 'POST', body: form });
+                    const result = await res.json();
+                    
+                    if(res.ok && result.success) {
+                        showToast('\u2705 ' + result.message);
+                    } else {
+                        showToast('\u274c ' + (result.error || '\u8ba2\u8d2d\u5931\u8d25'));
+                    }
+                } catch(e) {
+                    showToast('\u274c \u8ba2\u8d2d\u5931\u8d25: ' + e.message);
+                }
+                return;
+            }
+            
+            // 显示支付方式选择弹窗
+            showPaymentModal(planId, planName, price, channels);
+        }
+        
+        function showPaymentModal(planId, planName, price, channels) {
+            // 创建弹窗
+            var modal = document.createElement('div');
+            modal.id = 'paymentModal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;z-index:1000;';
+            
+            var content = '<div style="background:white;padding:25px;border-radius:12px;max-width:400px;width:90%;">';
+            content += '<h3 style="margin:0 0 20px 0;text-align:center;">\u9009\u62e9\u652f\u4ed8\u65b9\u5f0f</h3>';
+            content += '<div style="padding:15px;background:#f5f5f5;border-radius:8px;margin-bottom:20px;">';
+            content += '<p style="margin:0;"><strong>\u5957\u9910\uff1a</strong>' + planName + '</p>';
+            content += '<p style="margin:5px 0 0 0;color:#ff4d4f;font-size:18px;font-weight:600;">\u91d1\u989d\uff1a\uffe5' + price + '</p>';
+            content += '</div>';
+            
+            content += '<div style="margin-bottom:20px;">';
+            content += '<label style="display:block;margin-bottom:8px;font-weight:600;">\u652f\u4ed8\u901a\u9053</label>';
+            content += '<select id="payChannelSelect" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;">';
+            for(var i = 0; i < channels.length; i++) {
+                content += '<option value="' + channels[i].id + '" data-code="' + channels[i].code + '">' + channels[i].name + '</option>';
+            }
+            content += '</select>';
+            content += '</div>';
+            
+            content += '<div style="display:flex;gap:10px;">';
+            content += '<button onclick="closePaymentModal()" style="flex:1;padding:10px;background:#999;color:white;border:none;border-radius:4px;cursor:pointer;">\u53d6\u6d88</button>';
+            content += '<button onclick="submitPayment(' + planId + ')" style="flex:1;padding:10px;background:#52c41a;color:white;border:none;border-radius:4px;cursor:pointer;">\u786e\u8ba4\u652f\u4ed8</button>';
+            content += '</div>';
+            content += '</div>';
+            
+            modal.innerHTML = content;
+            document.body.appendChild(modal);
+        }
+        
+        function closePaymentModal() {
+            var modal = document.getElementById('paymentModal');
+            if(modal) modal.remove();
+        }
+        
+        async function submitPayment(planId) {
+            const channelSelect = document.getElementById('payChannelSelect');
+            if(!channelSelect || !channelSelect.value) {
+                showToast('❌ 请选择支付通道');
+                return;
+            }
+            const channelId = channelSelect.value;
+            const selectedOption = channelSelect.options[channelSelect.selectedIndex];
+            const tradeType = selectedOption ? selectedOption.getAttribute('data-code') : 'usdt.trc20';
+            
+            closePaymentModal();
+            showToast('⏳ 正在创建订单...');
+            
+            // 先创建订单
+            const createForm = new FormData();
+            createForm.append('plan_id', planId);
             
             try {
-                const res = await fetch('/api/user/orders/create', { method: 'POST', body: form });
-                const result = await res.json();
+                const createRes = await fetch('/api/user/orders/create', { method: 'POST', body: createForm });
+                const createResult = await createRes.json();
                 
-                if(res.ok && result.success) {
-                    showToast('\u2705 ' + result.message);
+                if(!createRes.ok || !createResult.success) {
+                    showToast('❌ ' + (createResult.error || '创建订单失败'));
+                    return;
+                }
+                
+                // 如果是自动审核通过，无需支付
+                if(createResult.message && createResult.message.includes('自动审核')) {
+                    showToast('✅ ' + createResult.message);
+                    return;
+                }
+                
+                // 获取订单ID并发起支付
+                const orderId = createResult.order_id;
+                if(!orderId) {
+                    showToast('❌ 订单已创建，请到订单列表查看');
+                    return;
+                }
+                
+                showToast('⏳ 正在发起支付...');
+                
+                // 调用支付接口
+                const payForm = new FormData();
+                payForm.append('order_id', orderId);
+                payForm.append('channel_id', channelId);
+                payForm.append('trade_type', tradeType || 'usdt.trc20');
+                
+                const payRes = await fetch('/api/user/orders/pay', { method: 'POST', body: payForm });
+                const payResult = await payRes.json();
+                
+                if(payRes.ok && payResult.success && payResult.data && payResult.data.payment_url) {
+                    // 新窗口打开支付页面，避免丢失当前会话
+                    showToast('✅ 支付页面已打开，请在新窗口完成支付');
+                    window.open(payResult.data.payment_url, '_blank');
                 } else {
-                    showToast('\u274c ' + (result.error || '\u8ba2\u8d2d\u5931\u8d25'));
+                    showToast('❌ ' + (payResult.error || '发起支付失败，请检查支付通道配置'));
                 }
             } catch(e) {
-                showToast('\u274c \u8ba2\u8d2d\u5931\u8d25: ' + e.message);
+                showToast('❌ 支付失败: ' + e.message);
             }
         }
         
@@ -5203,9 +5716,15 @@ async function handleUserCreateOrder(request, env) {
             ? '您已使用过自动审核，订单已提交，请等待管理员审核' 
             : '订单创建成功，请等待管理员审核';
         
+        // 获取刚创建的订单ID
+        const newOrder = await env.DB.prepare(
+            "SELECT id FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 1"
+        ).bind(session.user_id).first();
+        
         return new Response(JSON.stringify({ 
             success: true, 
-            message: message 
+            message: message,
+            order_id: newOrder ? newOrder.id : null
         }), { 
             status: 200, 
             headers: { 'Content-Type': 'application/json; charset=utf-8' } 
@@ -5459,6 +5978,19 @@ async function handleAdminGetOrders(request, env) {
     }
     
     try {
+        // 获取系统设置中的过期时间配置
+        const settings = await dbGetSettings(env) || {};
+        const pendingOrderExpiry = settings.pendingOrderExpiry || 0; // 分钟，0表示永不过期
+        
+        // 如果设置了过期时间，先更新过期的订单
+        if (pendingOrderExpiry > 0) {
+            const expiryTime = Date.now() - (pendingOrderExpiry * 60 * 1000);
+            await env.DB.prepare(`
+                UPDATE orders SET status = 'expired' 
+                WHERE status = 'pending' AND created_at < ?
+            `).bind(expiryTime).run();
+        }
+        
         const orders = await env.DB.prepare(`
             SELECT 
                 o.id, 
@@ -5479,9 +6011,17 @@ async function handleAdminGetOrders(request, env) {
             ORDER BY o.created_at DESC
         `).all();
         
+        // 计算每个待审核订单的过期时间
+        const ordersWithExpiry = (orders.results || []).map(o => {
+            if (o.status === 'pending' && pendingOrderExpiry > 0) {
+                o.expires_at = o.created_at + (pendingOrderExpiry * 60 * 1000);
+            }
+            return o;
+        });
+        
         return new Response(JSON.stringify({ 
             success: true, 
-            orders: orders.results || [] 
+            orders: ordersWithExpiry 
         }), { 
             status: 200, 
             headers: { 'Content-Type': 'application/json; charset=utf-8' } 
@@ -5670,6 +6210,494 @@ async function handleUserCheckin(request, env) {
     } catch (e) {
         console.error('签到错误:', e);
         return new Response(JSON.stringify({ error: '服务器错误' }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// =============================================================================
+// 支付通道管理 API
+// =============================================================================
+
+// 管理员获取支付通道列表
+async function handleAdminGetPaymentChannels(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const { results } = await env.DB.prepare(
+            "SELECT * FROM payment_channels ORDER BY created_at DESC"
+        ).all();
+        
+        return new Response(JSON.stringify({ 
+            success: true, 
+            data: results || []
+        }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        console.error('获取支付通道错误:', e);
+        return new Response(JSON.stringify({ error: '服务器错误' }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// 用户获取启用的支付通道
+async function handleGetPaymentChannels(request, env) {
+    try {
+        const { results } = await env.DB.prepare(
+            "SELECT id, name, code FROM payment_channels WHERE enabled = 1"
+        ).all();
+        
+        return new Response(JSON.stringify({ 
+            success: true, 
+            data: results || []
+        }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ error: '服务器错误' }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// 保存支付通道
+async function handleAdminSavePaymentChannel(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const id = formData.get('id');
+        const name = formData.get('name');
+        const code = formData.get('code');
+        const apiUrl = formData.get('api_url');
+        const apiToken = formData.get('api_token');
+        
+        if (!name || !code || !apiUrl || !apiToken) {
+            return new Response(JSON.stringify({ error: '参数不完整' }), { 
+                status: 400, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+        
+        if (id) {
+            // 更新
+            await env.DB.prepare(
+                "UPDATE payment_channels SET name = ?, code = ?, api_url = ?, api_token = ? WHERE id = ?"
+            ).bind(name, code, apiUrl, apiToken, id).run();
+        } else {
+            // 新增
+            await env.DB.prepare(
+                "INSERT INTO payment_channels (name, code, api_url, api_token, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?)"
+            ).bind(name, code, apiUrl, apiToken, Date.now()).run();
+        }
+        
+        return new Response(JSON.stringify({ success: true }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        console.error('保存支付通道错误:', e);
+        return new Response(JSON.stringify({ error: e.message }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// 删除支付通道
+async function handleAdminDeletePaymentChannel(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const id = formData.get('id');
+        
+        await env.DB.prepare("DELETE FROM payment_channels WHERE id = ?").bind(id).run();
+        
+        return new Response(JSON.stringify({ success: true }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ error: '服务器错误' }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// 切换支付通道状态
+async function handleAdminTogglePaymentChannel(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const id = formData.get('id');
+        const enabled = formData.get('enabled') === 'true' ? 1 : 0;
+        
+        await env.DB.prepare(
+            "UPDATE payment_channels SET enabled = ? WHERE id = ?"
+        ).bind(enabled, id).run();
+        
+        return new Response(JSON.stringify({ success: true }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ error: '服务器错误' }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// 更新支付通道
+async function handleAdminUpdatePaymentChannel(request, env) {
+    if (!(await checkAuth(request, env))) {
+        return new Response(JSON.stringify({ error: '未授权' }), { 
+            status: 401, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+    
+    try {
+        const formData = await request.formData();
+        const id = formData.get('id');
+        const name = formData.get('name');
+        const code = formData.get('code');
+        const apiUrl = formData.get('api_url');
+        const apiToken = formData.get('api_token');
+        
+        if (!id || !name || !code || !apiUrl) {
+            return new Response(JSON.stringify({ error: '参数不完整' }), { 
+                status: 400, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+        
+        // 如果提供了新的 API Token 则更新
+        if (apiToken) {
+            await env.DB.prepare(
+                "UPDATE payment_channels SET name = ?, code = ?, api_url = ?, api_token = ? WHERE id = ?"
+            ).bind(name, code, apiUrl, apiToken, id).run();
+        } else {
+            await env.DB.prepare(
+                "UPDATE payment_channels SET name = ?, code = ?, api_url = ? WHERE id = ?"
+            ).bind(name, code, apiUrl, id).run();
+        }
+        
+        return new Response(JSON.stringify({ success: true }), { 
+            status: 200, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({ error: '服务器错误' }), { 
+            status: 500, 
+            headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+        });
+    }
+}
+
+// =============================================================================
+// 支付回调处理
+// =============================================================================
+
+// BEpusdt 签名验证
+async function verifyBepusdtSignature(params, token, signature) {
+    const sortedKeys = Object.keys(params).sort();
+    const signStr = sortedKeys
+        .filter(key => key !== 'signature' && params[key] !== undefined && params[key] !== '')
+        .map(key => `${key}=${params[key]}`)
+        .join('&');
+    
+    const toSign = signStr + token;
+    
+    const encoder = new TextEncoder();
+    const data = encoder.encode(toSign);
+    const hashBuffer = await crypto.subtle.digest('MD5', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex.toLowerCase() === signature.toLowerCase();
+}
+
+// 支付回调通知
+async function handlePaymentNotify(request, env) {
+    try {
+        const body = await request.json();
+        
+        console.log('收到支付回调:', JSON.stringify(body));
+
+        const { 
+            trade_id, 
+            order_id, 
+            amount, 
+            actual_amount, 
+            token, 
+            block_transaction_id,
+            signature,
+            status 
+        } = body;
+
+        // 解析 order_id (格式: ORDER_订单ID)
+        const orderIdMatch = order_id.match(/ORDER_(\d+)/);
+        if (!orderIdMatch) {
+            console.error('订单号格式错误:', order_id);
+            return new Response('ok', { status: 200 });
+        }
+        
+        const orderId = parseInt(orderIdMatch[1]);
+        
+        // 获取订单信息
+        const order = await env.DB.prepare(
+            "SELECT o.*, p.duration_days, u.uuid FROM orders o JOIN subscription_plans p ON o.plan_id = p.id JOIN user_accounts ua ON o.user_id = ua.id JOIN users u ON ua.uuid = u.uuid WHERE o.id = ?"
+        ).bind(orderId).first();
+        
+        if (!order) {
+            console.error('订单不存在:', orderId);
+            return new Response('ok', { status: 200 });
+        }
+        
+        // 获取支付通道配置进行签名验证
+        const channel = await env.DB.prepare(
+            "SELECT api_token FROM payment_channels WHERE enabled = 1 LIMIT 1"
+        ).first();
+        
+        if (channel) {
+            const verifyParams = { trade_id, order_id, amount, actual_amount, token, block_transaction_id, status };
+            const isValid = await verifyBepusdtSignature(verifyParams, channel.api_token, signature);
+            if (!isValid) {
+                console.error('签名验证失败');
+                // 即使签名失败也返回 ok，避免重复回调
+            }
+        }
+        
+        // 支付成功 (status === 2)
+        if (status === 2 && order.status === 'pending') {
+            // 更新用户到期时间
+            const user = await env.DB.prepare("SELECT expiry FROM users WHERE uuid = ?").bind(order.uuid).first();
+            const currentExpiry = user && user.expiry ? user.expiry : Date.now();
+            const newExpiry = Math.max(currentExpiry, Date.now()) + (order.duration_days * 24 * 60 * 60 * 1000);
+            
+            await env.DB.prepare(
+                "UPDATE users SET expiry = ? WHERE uuid = ?"
+            ).bind(newExpiry, order.uuid).run();
+            
+            // 更新订单状态
+            await env.DB.prepare(
+                "UPDATE orders SET status = 'approved', paid_at = ?, payment_trade_id = ? WHERE id = ?"
+            ).bind(Date.now(), trade_id, orderId).run();
+            
+            console.log('订单支付成功:', orderId, '用户到期时间更新为:', new Date(newExpiry).toISOString());
+        }
+
+        return new Response('ok', { status: 200 });
+
+    } catch (error) {
+        console.error('处理支付回调错误:', error);
+        return new Response('ok', { status: 200 });
+    }
+}
+
+// =============================================================================
+// 用户支付订单
+// =============================================================================
+
+// 生成 BEpusdt 签名
+async function generateBepusdtSignature(params, token) {
+    const sortedKeys = Object.keys(params).sort();
+    const signStr = sortedKeys
+        .filter(key => key !== 'signature' && params[key] !== undefined && params[key] !== '')
+        .map(key => `${key}=${params[key]}`)
+        .join('&');
+    
+    const toSign = signStr + token;
+    
+    const encoder = new TextEncoder();
+    const data = encoder.encode(toSign);
+    const hashBuffer = await crypto.subtle.digest('MD5', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex.toLowerCase();
+}
+
+// 用户支付订单
+async function handleUserPayOrder(request, env) {
+    try {
+        const cookie = request.headers.get('Cookie');
+        if (!cookie) {
+            return new Response(JSON.stringify({ error: '未登录' }), { 
+                status: 401, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        const match = cookie.match(/user_session=([^;]+)/);
+        if (!match) {
+            return new Response(JSON.stringify({ error: '未登录' }), { 
+                status: 401, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        const session = await dbValidateSession(env, match[1]);
+        if (!session) {
+            return new Response(JSON.stringify({ error: '会话已过期' }), { 
+                status: 401, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        const formData = await request.formData();
+        const orderId = parseInt(formData.get('order_id'));
+        const channelId = parseInt(formData.get('channel_id'));
+        const tradeType = formData.get('trade_type') || 'usdt.trc20';
+
+        if (!orderId) {
+            return new Response(JSON.stringify({ error: '订单ID不能为空' }), { 
+                status: 400, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        // 获取订单
+        const order = await env.DB.prepare(
+            "SELECT * FROM orders WHERE id = ? AND user_id = ? AND status = 'pending'"
+        ).bind(orderId, session.user_id).first();
+
+        if (!order) {
+            return new Response(JSON.stringify({ error: '订单不存在或已处理' }), { 
+                status: 404, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        // 获取支付通道
+        let channel;
+        if (channelId) {
+            channel = await env.DB.prepare(
+                "SELECT * FROM payment_channels WHERE id = ? AND enabled = 1"
+            ).bind(channelId).first();
+        } else {
+            channel = await env.DB.prepare(
+                "SELECT * FROM payment_channels WHERE enabled = 1 LIMIT 1"
+            ).first();
+        }
+
+        if (!channel) {
+            return new Response(JSON.stringify({ error: '支付通道未配置或已禁用' }), { 
+                status: 400, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        // 获取系统设置中的支付订单过期时间
+        const settings = await dbGetSettings(env) || {};
+        const paymentOrderExpiry = settings.paymentOrderExpiry || 15; // 默认15分钟
+
+        // 构建支付请求
+        const url = new URL(request.url);
+        const notifyUrl = `${url.origin}/api/payment/notify`;
+        const redirectUrl = `${url.origin}/user`; // 支付完成后跳转到用户面板
+        const paymentOrderId = `ORDER_${orderId}`;
+
+        const payParams = {
+            order_id: paymentOrderId,
+            amount: order.amount,
+            notify_url: notifyUrl,
+            redirect_url: redirectUrl,
+            trade_type: tradeType
+        };
+
+        // 生成签名（不包含 expiration_time）
+        payParams.signature = await generateBepusdtSignature(payParams, channel.api_token);
+
+        // 调用 BEpusdt 创建订单（不传 expiration_time，使用 BEpusdt 默认值）
+        let response;
+        let result;
+        try {
+            response = await fetch(`${channel.api_url}/api/v1/order/create-transaction`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payParams)
+            });
+            result = await response.json();
+        } catch (fetchError) {
+            console.error('调用BEpusdt失败:', fetchError);
+            return new Response(JSON.stringify({
+                success: false,
+                error: '无法连接支付网关: ' + fetchError.message
+            }), { 
+                status: 400, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+        console.log('BEpusdt响应:', JSON.stringify(result));
+
+        if (result.status_code === 200) {
+            // 更新订单支付信息
+            await env.DB.prepare(
+                "UPDATE orders SET payment_order_id = ?, payment_type = ? WHERE id = ?"
+            ).bind(paymentOrderId, tradeType, orderId).run();
+
+            return new Response(JSON.stringify({
+                success: true,
+                data: {
+                    trade_id: result.data.trade_id,
+                    amount: result.data.amount,
+                    actual_amount: result.data.actual_amount,
+                    token: result.data.token,
+                    payment_url: result.data.payment_url,
+                    expiration_time: result.data.expiration_time
+                }
+            }), { 
+                status: 200, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        } else {
+            return new Response(JSON.stringify({
+                success: false,
+                error: result.message || result.msg || '支付网关返回错误: ' + JSON.stringify(result)
+            }), { 
+                status: 400, 
+                headers: { 'Content-Type': 'application/json; charset=utf-8' } 
+            });
+        }
+
+    } catch (error) {
+        console.error('支付订单错误:', error);
+        return new Response(JSON.stringify({ error: error.message }), { 
             status: 500, 
             headers: { 'Content-Type': 'application/json; charset=utf-8' } 
         });

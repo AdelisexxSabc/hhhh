@@ -3,17 +3,39 @@ import { connect } from 'cloudflare:sockets';
 // =============================================================================
 // 配置区域 - 请根据实际情况修改
 // =============================================================================
-// 管理端 API 地址 (不要添加尾随斜杠)
-const REMOTE_API_URL = 'https://uuid.hailizi.workers.dev/api/users';
 
-// API 认证令牌 (可选，如果管理端需要认证)
-const API_TOKEN = '';
+// V2board API 配置
+const V2BOARD_CONFIG = {
+    apiHost: 'https://linyuch.eu.org',            // V2board 后端地址
+    apiKey: 'twitteitwitteitwittei',              // API Key (Token)
+    nodeId: 1,                                     // 节点 ID
+    nodeType: 'vless'                              // 节点类型: vless, vmess, trojan, shadowsocks
+};
 
 // 本地兜底配置 (当无法连接管理端时使用)
 const FALLBACK_CONFIG = {
     proxyIPs: ['bestproxy.030101.xyz:443'],
     bestDomains: ['bestcf.030101.xyz:443', 'japan.com:443', 'www.visa.com.sg:443']
 };
+
+// 内置反代IP配置（如果V2board面板无法配置，使用这些）
+const BUILTIN_PROXY_IPS = [
+    'ProxyIP.HK.CMLiussss.net:443',
+    'ProxyIP.JP.CMLiussss.net:443',
+    'ProxyIP.SG.CMLiussss.net:443',
+    'ProxyIP.US.CMLiussss.net:443',
+    'bestproxy.030101.xyz:443'
+];
+
+// 内置优选域名配置
+const BUILTIN_BEST_DOMAINS = [
+    'cf.twitter.now.cc:443',
+    'telecom.twitter.now.cc:443',
+    'unicom.twitter.now.cc:443',
+    'bestcf.030101.xyz:443',
+    'japan.com:443',
+    'www.visa.com.sg:443'
+];
 
 // 缓存配置
 const CACHE_TTL = 60000; // 缓存时间 60 秒
@@ -22,15 +44,16 @@ const CACHE_TTL = 60000; // 缓存时间 60 秒
 // 全局状态
 // =============================================================================
 let cachedData = {
-    users: {},
-    settings: FALLBACK_CONFIG,
-    lastUpdate: 0
+    users: {},           // { uuid: userId }
+    nodeInfo: null,
+    lastUpdate: 0,
+    trafficBuffer: [],   // 流量上报缓冲区
+    onlineUsers: new Set() // 在线用户集合
 };
 
 // =============================================================================
 // 地理位置智能匹配
 // =============================================================================
-// 地区关键词映射表（支持中英文、国家/地区代码）
 const GEO_KEYWORDS = {
     'HK': ['hk', 'hongkong', 'hong kong', '香港', 'hkg'],
     'TW': ['tw', 'taiwan', '台湾', 'taipei', '台北'],
@@ -50,11 +73,6 @@ const GEO_KEYWORDS = {
     'NL': ['nl', 'netherlands', '荷兰', 'amsterdam'],
 };
 
-/**
- * 从字符串中提取地理位置标识
- * @param {string} str - 待检测的字符串（域名或IP描述）
- * @return {string|null} - 地区代码（如 'HK', 'JP'）或 null
- */
 function extractGeoLocation(str) {
     if (!str) return null;
     const lowerStr = str.toLowerCase();
@@ -69,21 +87,12 @@ function extractGeoLocation(str) {
     return null;
 }
 
-/**
- * 智能排序代理列表，优先使用地理位置匹配的代理
- * @param {Array<string>} proxyList - 原始代理列表
- * @param {string} targetAddress - 目标地址
- * @return {Array<string>} - 排序后的代理列表
- */
 function smartSortProxies(proxyList, targetAddress) {
     if (!proxyList || proxyList.length === 0) return [];
     
     const targetGeo = extractGeoLocation(targetAddress);
-    
-    // 如果目标地址没有地理位置信息，保持原顺序
     if (!targetGeo) return [...proxyList];
     
-    // 分类代理：匹配的、不匹配的
     const matched = [];
     const unmatched = [];
     
@@ -96,7 +105,6 @@ function smartSortProxies(proxyList, targetAddress) {
         }
     });
     
-    // 匹配的代理优先，然后是其他代理
     return [...matched, ...unmatched];
 }
 
@@ -104,19 +112,19 @@ function smartSortProxies(proxyList, targetAddress) {
 // 主入口
 // =============================================================================
 export default {
-    async fetch(req) {
+    async fetch(req, env, ctx) {
         const url = new URL(req.url);
         
         // WebSocket 升级请求 - VLESS 流量处理
         if (req.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-            return await handleWebSocket(req);
+            return await handleWebSocket(req, ctx);
         }
         
         // HTTP 请求
         if (req.method === 'GET') {
             // 根路径 - 健康检查
             if (url.pathname === '/') {
-                return new Response('<h1>✅ Node Worker Running</h1>', {
+                return new Response('<h1>✅ V2bX Node Worker Running</h1><p>Connecting to V2board backend</p>', {
                     status: 200,
                     headers: { 'Content-Type': 'text/html; charset=utf-8' }
                 });
@@ -124,129 +132,136 @@ export default {
             
             // 调试接口 - 查看当前配置
             if (url.pathname === '/debug') {
-                await syncRemoteConfig();
+                await syncV2boardConfig();
                 return new Response(JSON.stringify({
-                    users: cachedData.users,
-                    settings: cachedData.settings,
+                    users: Object.keys(cachedData.users),
+                    userCount: Object.keys(cachedData.users).length,
+                    onlineUsers: Array.from(cachedData.onlineUsers),
+                    onlineCount: cachedData.onlineUsers.size,
+                    nodeInfo: cachedData.nodeInfo,
+                    proxyIPs: BUILTIN_PROXY_IPS,
+                    bestDomains: BUILTIN_BEST_DOMAINS,
                     lastUpdate: new Date(cachedData.lastUpdate).toISOString(),
-                    apiUrl: REMOTE_API_URL
+                    v2boardUrl: V2BOARD_CONFIG.apiHost
                 }, null, 2), {
                     headers: { 'Content-Type': 'application/json' }
                 });
             }
             
+            // 手动触发在线用户上报
+            if (url.pathname === '/report-online') {
+                ctx.waitUntil(reportOnlineUsers());
+                return new Response('Online users report triggered', { status: 200 });
+            }
+            
             // UUID 订阅路径
-            await syncRemoteConfig();
+            await syncV2boardConfig();
             const users = cachedData.users;
             
             // 检查路径中是否包含有效 UUID
-            for (const [uuid, userInfo] of Object.entries(users)) {
+            for (const uuid of Object.keys(users)) {
                 if (url.pathname.toLowerCase().includes(uuid.toLowerCase())) {
-                    return await handleSubscription(req, uuid, userInfo);
+                    return await handleSubscription(req, uuid);
                 }
             }
         }
         
-        return new Response('Not Found - No matching UUID in path. Please check: 1) API URL is configured correctly, 2) User exists in manager, 3) UUID in URL is correct', { status: 404 });
+        return new Response('Not Found - No matching UUID in path', { status: 404 });
     }
 };
 
 // =============================================================================
-// 配置同步 - 从管理端获取最新配置
+// V2board 配置同步
 // =============================================================================
-async function syncRemoteConfig(forceRefresh = false) {
+async function syncV2boardConfig(forceRefresh = false) {
     const now = Date.now();
     
-    // 如果缓存未过期且非强制刷新，直接返回
+    // 缓存检查
     if (!forceRefresh && (now - cachedData.lastUpdate) < CACHE_TTL) {
         return;
     }
     
-    // 防止频繁刷新（强制刷新时至少间隔 5 秒）
     if (forceRefresh && (now - cachedData.lastUpdate) < 5000) {
         return;
     }
     
     try {
-        const headers = { 'User-Agent': 'CF-Node-Worker/1.0' };
-        if (API_TOKEN) {
-            headers['Authorization'] = `Bearer ${API_TOKEN}`;
-        }
+        // 1. 获取节点信息
+        const nodeInfoUrl = `${V2BOARD_CONFIG.apiHost}/api/v1/server/UniProxy/config?node_type=${V2BOARD_CONFIG.nodeType}&node_id=${V2BOARD_CONFIG.nodeId}&token=${V2BOARD_CONFIG.apiKey}`;
         
-        const response = await fetch(REMOTE_API_URL, { 
-            headers,
-            cf: { cacheTtl: 0 } // 禁用 Cloudflare 缓存
+        const nodeInfoResp = await fetch(nodeInfoUrl, {
+            headers: {
+                'User-Agent': 'V2bX-CF-Worker/1.0'
+            },
+            cf: { cacheTtl: 0 }
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+        if (!nodeInfoResp.ok) {
+            throw new Error(`Get node info failed: HTTP ${nodeInfoResp.status}`);
         }
         
-        const data = await response.json();
+        const nodeInfo = await nodeInfoResp.json();
         
-        // 更新用户列表（支持新格式：包含 expiry）
-        if (data.users && typeof data.users === 'object') {
-            cachedData.users = data.users;
+        // 2. 获取用户列表
+        const userListUrl = `${V2BOARD_CONFIG.apiHost}/api/v1/server/UniProxy/user?node_type=${V2BOARD_CONFIG.nodeType}&node_id=${V2BOARD_CONFIG.nodeId}&token=${V2BOARD_CONFIG.apiKey}`;
+        
+        const userListResp = await fetch(userListUrl, {
+            headers: {
+                'User-Agent': 'V2bX-CF-Worker/1.0'
+            },
+            cf: { cacheTtl: 0 }
+        });
+        
+        if (!userListResp.ok) {
+            throw new Error(`Get user list failed: HTTP ${userListResp.status}`);
         }
         
-        // 获取官网地址（从 subUrl 中提取）
-        if (data.settings && data.settings.subUrl) {
-            cachedData.websiteUrl = data.settings.subUrl;
+        const userData = await userListResp.json();
+        
+        // 解析用户列表
+        const users = {};
+        if (userData.users && Array.isArray(userData.users)) {
+            userData.users.forEach(user => {
+                // user 结构: { id: int, uuid: string, speed_limit: int, device_limit: int }
+                users[user.uuid] = user.id;
+            });
         }
         
-        // 更新设置
-        if (data.settings && typeof data.settings === 'object') {
-            const settings = {};
-            
-            // 处理 proxyIPs (支持数组和单个字符串)
-            if (Array.isArray(data.settings.proxyIPs) && data.settings.proxyIPs.length > 0) {
-                settings.proxyIPs = data.settings.proxyIPs;
-            } else if (data.settings.proxyIP) {
-                settings.proxyIPs = [data.settings.proxyIP];
-            } else {
-                settings.proxyIPs = FALLBACK_CONFIG.proxyIPs;
-            }
-            
-            // 处理 bestDomains
-            if (Array.isArray(data.settings.bestDomains) && data.settings.bestDomains.length > 0) {
-                settings.bestDomains = data.settings.bestDomains;
-            } else {
-                settings.bestDomains = FALLBACK_CONFIG.bestDomains;
-            }
-            
-            cachedData.settings = settings;
-        }
-        
+        // 更新缓存
+        cachedData.users = users;
+        cachedData.nodeInfo = nodeInfo;
         cachedData.lastUpdate = now;
         
+        console.log(`Synced ${Object.keys(users).length} users from V2board`);
+        
     } catch (error) {
-        console.error('Failed to sync config:', error.message);
-        // 保持使用上次成功的配置或兜底配置
+        console.error('Failed to sync V2board config:', error.message);
+        // 保持使用上次成功的配置
     }
 }
 
 // =============================================================================
 // 订阅处理 - 生成 VLESS 订阅链接
 // =============================================================================
-async function handleSubscription(req, uuid, userInfo) {
+async function handleSubscription(req, uuid) {
     const url = new URL(req.url);
     const workerDomain = url.hostname;
     
-    // 获取用户到期时间
-    const expiry = typeof userInfo === 'object' ? userInfo.expiry : null;
-    const userName = typeof userInfo === 'object' ? userInfo.name : userInfo;
+    const nodeInfo = cachedData.nodeInfo;
+    if (!nodeInfo) {
+        return new Response('Node not configured', { status: 503 });
+    }
     
-    // 获取官网地址
-    const websiteUrl = cachedData.websiteUrl || '';
-    
-    const links = generateVlessLinks(workerDomain, uuid, userName, expiry, websiteUrl);
+    const links = generateVlessLinks(workerDomain, uuid, nodeInfo);
     const base64Content = btoa(links.join('\n'));
     
     return new Response(base64Content, {
         headers: {
             'Content-Type': 'text/plain; charset=utf-8',
             'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma': 'no-cache'
+            'Pragma': 'no-cache',
+            'Profile-Update-Interval': '6',
+            'Subscription-Userinfo': `upload=0; download=0; total=10737418240; expire=0`
         }
     });
 }
@@ -254,157 +269,114 @@ async function handleSubscription(req, uuid, userInfo) {
 // =============================================================================
 // 生成 VLESS 订阅链接
 // =============================================================================
-function generateVlessLinks(workerDomain, uuid, userName, expiry, websiteUrl) {
+function generateVlessLinks(workerDomain, uuid, nodeInfo) {
     const links = [];
-    const wsPath = encodeURIComponent('/?ed=2048');
-    const protocol = 'vless';
-    const domains = cachedData.settings.bestDomains || FALLBACK_CONFIG.bestDomains;
     
-    // 格式化到期时间
-    function formatExpiry(timestamp) {
-        if (!timestamp) return '永久有效';
-        const d = new Date(timestamp);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
+    // 从节点信息中提取配置
+    const protocol = V2BOARD_CONFIG.nodeType; // vless, vmess, trojan
+    const port = nodeInfo.server_port || 443;
+    const network = nodeInfo.network || 'ws';
+    const serverName = nodeInfo.server_name || nodeInfo.host || workerDomain;
     
-    // 获取第一个节点的地址用于创建信息节点
-    let firstAddress = 'telecom.1412.tech:443';
-    if (domains.length > 0) {
-        const firstItem = domains[0];
-        const parts = firstItem.split('#');
-        let addressPart = parts[0].trim();
-        
-        // 处理地址和端口
-        if (addressPart.startsWith('[')) {
-            firstAddress = addressPart;
-        } else if (addressPart.includes('[') && addressPart.includes(']')) {
-            firstAddress = addressPart;
-        } else {
-            const colonCount = (addressPart.match(/:/g) || []).length;
-            if (colonCount > 1) {
-                const ipv6PortMatch = addressPart.match(/^(.+):(\d+)$/);
-                if (ipv6PortMatch && !isNaN(ipv6PortMatch[2])) {
-                    firstAddress = `[${ipv6PortMatch[1]}]:${ipv6PortMatch[2]}`;
-                } else {
-                    firstAddress = `[${addressPart}]:443`;
-                }
-            } else if (addressPart.includes(':')) {
-                firstAddress = addressPart;
-            } else {
-                firstAddress = `${addressPart}:443`;
+    // 使用内置优选域名生成多个节点
+    const domains = BUILTIN_BEST_DOMAINS.length > 0 ? BUILTIN_BEST_DOMAINS : [workerDomain];
+    
+    // 解析网络配置
+    let path = '/?ed=2048';
+    if (nodeInfo.network_settings) {
+        try {
+            const networkSettings = typeof nodeInfo.network_settings === 'string' 
+                ? JSON.parse(nodeInfo.network_settings) 
+                : nodeInfo.network_settings;
+            
+            if (networkSettings.path) {
+                path = networkSettings.path;
             }
+        } catch (e) {
+            console.error('Parse network_settings failed:', e);
         }
     }
     
-    // 构建公共参数
-    const commonParams = new URLSearchParams({
+    // TLS 配置
+    const tls = nodeInfo.tls === 1 ? 'tls' : 'none';
+    const security = tls === 'tls' ? 'tls' : 'none';
+    
+    // 构建 VLESS 参数
+    const params = new URLSearchParams({
         encryption: 'none',
-        security: 'tls',
-        sni: workerDomain,
-        fp: 'chrome',
-        type: 'ws',
+        security: security,
+        type: network,
         host: workerDomain,
-        path: wsPath
+        path: encodeURIComponent(path),
+        sni: serverName,
+        fp: 'chrome'
     });
     
-    // 添加官网信息节点（排第一）
-    const websiteDisplay = websiteUrl ? websiteUrl.replace(/^https?:\/\//, '') : '未设置官网';
-    const websiteLink = `${protocol}://${uuid}@${firstAddress}?${commonParams.toString()}#${encodeURIComponent('官网' + websiteDisplay)}`;
-    links.push(websiteLink);
+    // Reality 支持
+    if (nodeInfo.tls === 2 && nodeInfo.tls_settings) {
+        params.set('security', 'reality');
+        params.set('pbk', nodeInfo.tls_settings.public_key || '');
+        params.set('sid', nodeInfo.tls_settings.short_id || '');
+        params.set('spx', '');
+    }
     
-    // 添加套餐到期时间节点（排第二）
-    const expiryDisplay = formatExpiry(expiry);
-    const expiryLink = `${protocol}://${uuid}@${firstAddress}?${commonParams.toString()}#${encodeURIComponent('套餐到期：' + expiryDisplay)}`;
-    links.push(expiryLink);
+    // Flow (VLESS only)
+    if (protocol === 'vless' && nodeInfo.flow) {
+        params.set('flow', nodeInfo.flow);
+    }
     
-    // 排序: 只将 IPv6 IP 地址排到后面，手动添加的域名保持原位
-    const sortedDomains = [...domains].sort((a, b) => {
-        // 检测是否是 IPv6 IP 地址 (包含方括号 [ 的是 IPv6 IP)
-        const isV6IpA = a.includes('[');
-        const isV6IpB = b.includes('[');
-        
-        // 只对 IPv6 IP 地址进行排序，域名保持原位
-        if (isV6IpA && !isV6IpB) return 1;  // a是IPv6 IP, b不是, a排后面
-        if (!isV6IpA && isV6IpB) return -1; // a不是IPv6 IP, b是, a排前面
-        return 0; // 其他情况保持原顺序
-    });
-    
-    sortedDomains.forEach((item, index) => {
-        // 支持格式:
-        // 1. domain:port#节点名
-        // 2. domain#节点名 (默认端口 443)
-        // 3. 1.1.1.1:443#节点名
-        // 4. 1.1.1.1#节点名 (默认端口 443)
-        // 5. [2606:4700::]:443#节点名 (IPv6)
-        // 6. 2606:4700::#节点名 (IPv6 无端口，自动添加)
-        // 7. domain:port (使用域名/IP 作为节点名)
-        // 8. domain (使用域名作为节点名，默认端口 443)
-        
-        const parts = item.split('#');
+    // 为每个优选域名生成节点
+    domains.forEach((domainEntry, index) => {
+        // 解析域名配置：domain:port#别名 或 domain#别名 或 domain:port 或 domain
+        const parts = domainEntry.split('#');
         let addressPart = parts[0].trim();
         const customAlias = parts[1] ? parts[1].trim() : null;
         
-        // 处理地址和端口（支持 IPv6）
-        let address;
-        
-        // 检测 IPv6 地址（已经带方括号的格式：[2606:4700::]:443）
-        if (addressPart.startsWith('[')) {
-            // IPv6 地址已经是正确格式，直接使用
-            address = addressPart;
-        } else if (addressPart.includes('[') && addressPart.includes(']')) {
-            // IPv6 格式已经包含方括号
-            address = addressPart;
+        // 处理地址和端口
+        let host, hostPort;
+        if (addressPart.includes(':')) {
+            const addrParts = addressPart.split(':');
+            host = addrParts[0];
+            hostPort = parseInt(addrParts[1]);
         } else {
-            // 检测是否是裸 IPv6 地址（包含多个冒号但没有方括号）
-            const colonCount = (addressPart.match(/:/g) || []).length;
-            
-            if (colonCount > 1) {
-                // 裸 IPv6 地址
-                const ipv6PortMatch = addressPart.match(/^(.+):(\d+)$/);
-                if (ipv6PortMatch && !isNaN(ipv6PortMatch[2])) {
-                    // 有端口: 2606:4700::1:443
-                    const ipv6Addr = ipv6PortMatch[1];
-                    const port = ipv6PortMatch[2];
-                    address = `[${ipv6Addr}]:${port}`;
-                } else {
-                    // 无端口，添加默认端口
-                    address = `[${addressPart}]:443`;
-                }
-            } else if (addressPart.includes(':')) {
-                // IPv4 或域名，已包含端口
-                address = addressPart;
-            } else {
-                // IPv4 或域名，没有端口，添加默认端口 443
-                address = `${addressPart}:443`;
-            }
+            host = addressPart;
+            hostPort = 443;
         }
         
-        // 生成节点名称(直接使用域名/IP或自定义别名,不添加用户名前缀)
+        // 生成节点名称
         let nodeName;
         if (customAlias) {
-            // 使用自定义别名
-            nodeName = customAlias;
+            nodeName = `${customAlias}-Node${V2BOARD_CONFIG.nodeId}`;
         } else {
-            // 使用地址(去掉端口)作为节点名
-            nodeName = addressPart.replace(/:\d+$/, '');
+            nodeName = `${host}-Node${V2BOARD_CONFIG.nodeId}`;
         }
         
-        // 构建 VLESS 参数
-        const params = new URLSearchParams({
-            encryption: 'none',
-            security: 'tls',
-            sni: workerDomain,
-            fp: 'chrome',
-            type: 'ws',
-            host: workerDomain,
-            path: wsPath
-        });
+        // 生成链接
+        let vlessLink;
+        if (protocol === 'vless') {
+            vlessLink = `vless://${uuid}@${host}:${hostPort}?${params.toString()}#${encodeURIComponent(nodeName)}`;
+        } else if (protocol === 'vmess') {
+            // VMess 使用 JSON 格式
+            const vmessConfig = {
+                v: '2',
+                ps: nodeName,
+                add: host,
+                port: hostPort.toString(),
+                id: uuid,
+                aid: '0',
+                net: network,
+                type: 'none',
+                host: workerDomain,
+                path: path,
+                tls: tls,
+                sni: serverName,
+                alpn: ''
+            };
+            vlessLink = 'vmess://' + btoa(JSON.stringify(vmessConfig));
+        } else if (protocol === 'trojan') {
+            vlessLink = `trojan://${uuid}@${host}:${hostPort}?${params.toString()}#${encodeURIComponent(nodeName)}`;
+        }
         
-        // 生成 VLESS 链接
-        const vlessLink = `${protocol}://${uuid}@${address}?${params.toString()}#${encodeURIComponent(nodeName)}`;
         links.push(vlessLink);
     });
     
@@ -414,9 +386,9 @@ function generateVlessLinks(workerDomain, uuid, userName, expiry, websiteUrl) {
 // =============================================================================
 // WebSocket 处理 - VLESS 流量转发
 // =============================================================================
-async function handleWebSocket(req) {
-    // 在处理 WebSocket 前同步配置
-    await syncRemoteConfig();
+async function handleWebSocket(req, ctx) {
+    // 同步配置
+    await syncV2boardConfig();
     
     // 创建 WebSocket 对
     const [client, webSocket] = Object.values(new WebSocketPair());
@@ -434,19 +406,29 @@ async function handleWebSocket(req) {
         }
     }
     
-    // 获取代理模式参数
-    const mode = url.searchParams.get('mode') || 'auto';
-    const proxyParam = url.searchParams.get('proxyip');
+    // 获取代理配置 - 优先级：V2board配置 > 内置配置 > 兜底配置
+    const nodeInfo = cachedData.nodeInfo;
+    let proxyIPs = FALLBACK_CONFIG.proxyIPs;
     
-    // 确定代理 IP 列表
-    let proxyIPs = cachedData.settings.proxyIPs || FALLBACK_CONFIG.proxyIPs;
-    if (proxyParam) {
-        proxyIPs = [proxyParam];
+    // 从节点信息中获取代理配置
+    if (nodeInfo && nodeInfo.routes) {
+        const proxyRoutes = nodeInfo.routes.filter(r => r.action === 'proxy');
+        if (proxyRoutes.length > 0) {
+            proxyIPs = proxyRoutes.map(r => r.action_value);
+        } else if (BUILTIN_PROXY_IPS.length > 0) {
+            // V2board没有配置，使用内置配置
+            proxyIPs = BUILTIN_PROXY_IPS;
+        }
+    } else if (BUILTIN_PROXY_IPS.length > 0) {
+        // 没有节点信息，使用内置配置
+        proxyIPs = BUILTIN_PROXY_IPS;
     }
     
     let remoteSocket = null;
     let udpWriter = null;
     let isDNSQuery = false;
+    let currentUser = null;
+    let trafficStats = { upload: 0, download: 0 };
     
     // 处理 WebSocket 消息流
     new ReadableStream({
@@ -456,6 +438,13 @@ async function handleWebSocket(req) {
             });
             
             webSocket.addEventListener('close', () => {
+                // 上报流量
+                if (currentUser) {
+                    reportTraffic(currentUser.id, trafficStats.upload, trafficStats.download, ctx);
+                    // 从在线用户中移除
+                    cachedData.onlineUsers.delete(currentUser.id);
+                }
+                
                 if (remoteSocket) {
                     try { remoteSocket.close(); } catch (e) {}
                 }
@@ -478,14 +467,12 @@ async function handleWebSocket(req) {
                         c => c.charCodeAt(0)
                     );
                     controller.enqueue(binaryData.buffer);
-                } catch (e) {
-                    // 忽略解码错误
-                }
+                } catch (e) {}
             }
         }
     }).pipeTo(new WritableStream({
         async write(chunk) {
-            // 如果是 DNS 查询，特殊处理
+            // DNS 查询处理
             if (isDNSQuery && udpWriter) {
                 try {
                     await udpWriter.write(chunk);
@@ -493,19 +480,22 @@ async function handleWebSocket(req) {
                 return;
             }
             
-            // 如果已经建立连接，直接转发数据
+            // 已建立连接，直接转发
             if (remoteSocket) {
                 try {
                     const writer = remoteSocket.writable.getWriter();
                     await writer.write(chunk);
                     writer.releaseLock();
+                    
+                    // 统计上传流量
+                    trafficStats.upload += chunk.byteLength;
                 } catch (e) {}
                 return;
             }
             
             // 解析 VLESS 协议头
             if (chunk.byteLength < 24) {
-                return; // 数据包太小，忽略
+                return;
             }
             
             const dataView = new DataView(chunk);
@@ -514,24 +504,30 @@ async function handleWebSocket(req) {
             const uuidBytes = new Uint8Array(chunk.slice(1, 17));
             const uuidString = bytesToUUID(uuidBytes);
             
-            // 检查 UUID 是否在允许列表中
+            // 检查 UUID 是否有效
             if (!cachedData.users[uuidString]) {
-                // UUID 不在缓存中，尝试强制刷新配置
-                await syncRemoteConfig(true);
+                await syncV2boardConfig(true);
                 
-                // 再次检查
                 if (!cachedData.users[uuidString]) {
                     console.log('Unauthorized UUID:', uuidString);
-                    return; // 未授权的 UUID，丢弃连接
+                    return;
                 }
             }
             
+            // 记录当前用户
+            currentUser = {
+                uuid: uuidString,
+                id: cachedData.users[uuidString]
+            };
+            
+            // 添加到在线用户集合
+            cachedData.onlineUsers.add(currentUser.id);
+            
             // 解析协议头
-            const version = dataView.getUint8(0); // 应该是 0
+            const version = dataView.getUint8(0);
             const optionLength = dataView.getUint8(17);
             const command = dataView.getUint8(18 + optionLength);
             
-            // 仅支持 TCP (1) 和 UDP (2)
             if (command !== 1 && command !== 2) {
                 return;
             }
@@ -563,28 +559,24 @@ async function handleWebSocket(req) {
                 targetAddress = ipv6Parts.join(':');
                 position += 16;
             } else {
-                return; // 不支持的地址类型
+                return;
             }
             
             // 响应头
             const responseHeader = new Uint8Array([version, 0]);
-            
-            // 实际负载数据
             const payload = chunk.slice(position);
             
-            // UDP 模式 - 仅支持 DNS 查询
+            // UDP 模式 - DNS 查询
             if (command === 2) {
                 if (targetPort !== 53) {
-                    return; // 仅支持 DNS (端口 53)
+                    return;
                 }
                 
                 isDNSQuery = true;
                 let headerSent = false;
                 
-                // DNS over HTTPS 处理
                 const { readable, writable } = new TransformStream({
                     transform(dnsQuery, controller) {
-                        // 解析 DNS 查询包（每个包前有 2 字节长度）
                         let offset = 0;
                         while (offset < dnsQuery.byteLength) {
                             const length = new DataView(dnsQuery.slice(offset, offset + 2)).getUint16(0);
@@ -595,7 +587,6 @@ async function handleWebSocket(req) {
                     }
                 });
                 
-                // 发送 DNS 查询到 Cloudflare DoH
                 readable.pipeTo(new WritableStream({
                     async write(dnsQuery) {
                         try {
@@ -615,6 +606,8 @@ async function handleWebSocket(req) {
                                 ]);
                                 webSocket.send(responsePacket);
                                 headerSent = true;
+                                
+                                trafficStats.download += responsePacket.byteLength;
                             }
                         } catch (e) {
                             console.error('DNS query failed:', e);
@@ -624,15 +617,15 @@ async function handleWebSocket(req) {
                 
                 udpWriter = writable.getWriter();
                 
-                // 写入第一个 DNS 查询
                 try {
                     await udpWriter.write(payload);
+                    trafficStats.upload += payload.byteLength;
                 } catch (e) {}
                 
                 return;
             }
             
-            // TCP 模式 - 建立连接（智能地理位置匹配 + 重试机制）
+            // TCP 模式 - 智能代理连接
             let socket = null;
             
             // 策略1：优先直连
@@ -643,9 +636,8 @@ async function handleWebSocket(req) {
                 });
                 await socket.opened;
             } catch (directError) {
-                // 策略2：直连失败，使用智能排序的代理列表
+                // 策略2：智能排序的代理列表
                 if (proxyIPs.length > 0) {
-                    // 🌍 智能排序：根据目标地址地理位置优先选择同地区代理
                     const sortedProxies = smartSortProxies(proxyIPs, targetAddress);
                     let lastError = null;
                     
@@ -661,16 +653,13 @@ async function handleWebSocket(req) {
                                 port: proxyPort
                             });
                             await socket.opened;
-                            // 连接成功，跳出循环
                             break;
                         } catch (proxyError) {
                             lastError = proxyError;
-                            // 继续尝试下一个代理
                             continue;
                         }
                     }
                     
-                    // 所有代理都失败
                     if (!socket) {
                         console.error('All proxy attempts failed:', lastError);
                         return;
@@ -692,6 +681,8 @@ async function handleWebSocket(req) {
                 const writer = socket.writable.getWriter();
                 await writer.write(payload);
                 writer.releaseLock();
+                
+                trafficStats.upload += payload.byteLength;
             } catch (e) {}
             
             // 转发远程响应到 WebSocket
@@ -700,16 +691,24 @@ async function handleWebSocket(req) {
                 write(responseChunk) {
                     if (webSocket.readyState === 1) {
                         if (!responseSent) {
-                            // 第一次响应需要加上头
-                            webSocket.send(new Uint8Array([...responseHeader, ...new Uint8Array(responseChunk)]));
+                            const firstPacket = new Uint8Array([...responseHeader, ...new Uint8Array(responseChunk)]);
+                            webSocket.send(firstPacket);
                             responseSent = true;
+                            trafficStats.download += firstPacket.byteLength;
                         } else {
-                            // 后续直接转发
                             webSocket.send(responseChunk);
+                            trafficStats.download += responseChunk.byteLength;
                         }
                     }
                 },
                 close() {
+                    // 上报流量
+                    if (currentUser) {
+                        reportTraffic(currentUser.id, trafficStats.upload, trafficStats.download, ctx);
+                        // 从在线用户中移除
+                        cachedData.onlineUsers.delete(currentUser.id);
+                    }
+                    
                     if (webSocket.readyState === 1) {
                         webSocket.close();
                     }
@@ -727,6 +726,104 @@ async function handleWebSocket(req) {
         status: 101,
         webSocket: client
     });
+}
+
+// =============================================================================
+// 流量上报到 V2board
+// =============================================================================
+function reportTraffic(userId, upload, download, ctx) {
+    // 缓冲流量数据
+    cachedData.trafficBuffer.push({
+        uid: userId,
+        upload: upload,
+        download: download,
+        timestamp: Date.now()
+    });
+    
+    // 当缓冲区达到一定数量时，批量上报
+    if (cachedData.trafficBuffer.length >= 5) {
+        ctx.waitUntil(Promise.all([
+            flushTrafficBuffer(),
+            reportOnlineUsers()
+        ]));
+    }
+}
+
+async function flushTrafficBuffer() {
+    if (cachedData.trafficBuffer.length === 0) {
+        return;
+    }
+    
+    // 聚合流量数据
+    const trafficMap = {};
+    cachedData.trafficBuffer.forEach(item => {
+        if (!trafficMap[item.uid]) {
+            trafficMap[item.uid] = [0, 0]; // [upload, download]
+        }
+        trafficMap[item.uid][0] += item.upload;
+        trafficMap[item.uid][1] += item.download;
+    });
+    
+    // 清空缓冲区
+    cachedData.trafficBuffer = [];
+    
+    try {
+        const reportUrl = `${V2BOARD_CONFIG.apiHost}/api/v1/server/UniProxy/push?node_type=${V2BOARD_CONFIG.nodeType}&node_id=${V2BOARD_CONFIG.nodeId}&token=${V2BOARD_CONFIG.apiKey}`;
+        
+        const response = await fetch(reportUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'V2bX-CF-Worker/1.0'
+            },
+            body: JSON.stringify(trafficMap)
+        });
+        
+        if (!response.ok) {
+            console.error('Report traffic failed:', response.status);
+        } else {
+            console.log(`Reported traffic for ${Object.keys(trafficMap).length} users`);
+        }
+    } catch (error) {
+        console.error('Report traffic error:', error.message);
+    }
+}
+
+// =============================================================================
+// 在线用户上报到 V2board
+// =============================================================================
+async function reportOnlineUsers() {
+    if (cachedData.onlineUsers.size === 0) {
+        return;
+    }
+    
+    try {
+        // 构造在线用户数据: { user_id: ["ip1", "ip2"] }
+        const onlineData = {};
+        cachedData.onlineUsers.forEach(userId => {
+            // 由于 Worker 环境限制，无法获取真实 IP，使用占位符
+            onlineData[userId] = ["CF-Worker"];
+        });
+        
+        const reportUrl = `${V2BOARD_CONFIG.apiHost}/api/v1/server/UniProxy/alive?node_type=${V2BOARD_CONFIG.nodeType}&node_id=${V2BOARD_CONFIG.nodeId}&token=${V2BOARD_CONFIG.apiKey}`;
+        
+        const response = await fetch(reportUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'V2bX-CF-Worker/1.0'
+            },
+            body: JSON.stringify(onlineData)
+        });
+        
+        if (!response.ok) {
+            console.error('Report online users failed:', response.status);
+        } else {
+            console.log(`Reported ${cachedData.onlineUsers.size} online users`);
+        }
+    } catch (error) {
+        console.error('Report online users error:', error.message);
+    }
 }
 
 // =============================================================================
