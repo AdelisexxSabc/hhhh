@@ -1220,7 +1220,8 @@ async function handleAdminSaveSettings(request, env) {
   
   const proxyIPStr = formData.get('proxyIP');
   const bestDomainsStr = formData.get('bestDomains');
-  const subUrl = formData.get('subUrl'); 
+  const subUrl = formData.get('subUrl');
+  const websiteUrl = formData.get('websiteUrl'); // 官网地址
 
   let proxyIPs = proxyIPStr ? proxyIPStr.split(/[\n,]+/).map(d => d.trim()).filter(d => d.length > 0) : [];
   let bestDomains = bestDomainsStr ? bestDomainsStr.split(/[\n,]+/).map(d => d.trim()).filter(d => d.length > 0) : [];
@@ -1230,7 +1231,7 @@ async function handleAdminSaveSettings(request, env) {
 
   // 获取现有设置，保留其他配置项
   const currentSettings = await dbGetSettings(env) || {};
-  const settings = { ...currentSettings, proxyIPs, bestDomains, subUrl };
+  const settings = { ...currentSettings, proxyIPs, bestDomains, subUrl, websiteUrl };
   
   await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
     .bind(SYSTEM_CONFIG_KEY, JSON.stringify(settings))
@@ -1400,6 +1401,7 @@ async function handleAdminPanel(request, env, adminPath) {
   let proxyIPsList = settings.proxyIPs || (settings.proxyIP ? [settings.proxyIP] : []);
   let bestDomainsList = settings.bestDomains || [];
   let subUrl = settings.subUrl || "";
+  let websiteUrl = settings.websiteUrl || ""; // 官网地址
 
   const rows = usersData.map(u => {
     const isExpired = u.expiry && u.expiry < Date.now();
@@ -1426,10 +1428,11 @@ async function handleAdminPanel(request, env, adminPath) {
           <div class="dropdown-content" id="dropdown-${u.uuid}">
             <div class="dropdown-item original" onclick="copySubByType('${u.uuid}', 'original')"><span>🔗</span> 原始订阅</div>
             <div class="dropdown-item clash" onclick="copySubByType('${u.uuid}', 'clash')"><span>⚡</span> Clash</div>
+            <div class="dropdown-item singbox" onclick="copySubByType('${u.uuid}', 'singbox')"><span>📦</span> SingBox</div>
             <div class="dropdown-item surge" onclick="copySubByType('${u.uuid}', 'surge')"><span>🌊</span> Surge</div>
             <div class="dropdown-item shadowrocket" onclick="copySubByType('${u.uuid}', 'shadowrocket')"><span>🚀</span> Shadowrocket</div>
             <div class="dropdown-item quantumult" onclick="copySubByType('${u.uuid}', 'quanx')"><span>🔮</span> Quantumult X</div>
-            <div class="dropdown-item v2ray" onclick="copySubByType('${u.uuid}', 'v2ray')"><span>✈️</span> V2Ray</div>
+            <div class="dropdown-item v2ray" onclick="copySubByType('${u.uuid}', 'v2ray')"><span>✈️</span> V2Ray/Xray</div>
             <div class="dropdown-item surfboard" onclick="copySubByType('${u.uuid}', 'surfboard')"><span>🏄</span> Surfboard</div>
           </div>
         </div>
@@ -1799,6 +1802,11 @@ async function handleAdminPanel(request, env, adminPath) {
                 <div style="margin-bottom: 20px; padding: 15px; background: #fff7e6; border: 1px solid #ffd591; border-radius: 4px;">
                     <label style="color: #d46b08;">节点订阅地址 (用于生成订阅链接)</label>
                     <input type="text" id="subUrl" value="${subUrl}" placeholder="请输入你部署的节点端 Worker 域名, 例如: https://aa.zqsl.eu.org">
+                </div>
+                <div style="margin-bottom: 20px; padding: 15px; background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 4px;">
+                    <label style="color: #0050b3;">官网地址 (显示在订阅节点列表中)</label>
+                    <input type="text" id="websiteUrl" value="${websiteUrl}" placeholder="请输入官网地址, 例如: snippets.1412.me (不需要加 https://)">
+                    <div style="margin-top:8px;font-size:12px;color:#666;">💡 此地址会显示在订阅节点的别名中，方便用户识别官网</div>
                 </div>
               </div>
               
@@ -2549,6 +2557,7 @@ async function handleAdminPanel(request, env, adminPath) {
           fd.append('proxyIP', proxyIPs.join('\\n'));
           fd.append('bestDomains', bestDomains.join('\\n'));
           fd.append('subUrl', document.getElementById('subUrl').value);
+          fd.append('websiteUrl', document.getElementById('websiteUrl').value);
           
           try { 
             const res = await fetch('/api/admin/saveSettings', { method: 'POST', body: fd }); 
@@ -2613,21 +2622,14 @@ async function handleAdminPanel(request, env, adminPath) {
                 clientName = '原始订阅';
                 schemeUrl = originalUrl;
             } else {
-                const targetMap = {
-                    'clash': 'clash',
-                    'surge': 'surge',
-                    'shadowrocket': 'shadowrocket',
-                    'quanx': 'quanx',
-                    'v2ray': 'v2ray',
-                    'surfboard': 'surfboard'
-                };
                 const clientNames = {
                     'clash': 'Clash',
                     'surge': 'Surge',
                     'shadowrocket': 'Shadowrocket',
                     'quanx': 'Quantumult X',
                     'v2ray': 'V2Ray',
-                    'surfboard': 'Surfboard'
+                    'surfboard': 'Surfboard',
+                    'singbox': 'SingBox'
                 };
                 const schemeMap = {
                     'clash': 'clash://install-config?url=',
@@ -2635,7 +2637,17 @@ async function handleAdminPanel(request, env, adminPath) {
                     'shadowrocket': 'shadowrocket://add/',
                     'quanx': 'quantumult-x:///add-resource?remote-resource=',
                     'v2ray': 'v2rayn://install-config?url=',
-                    'surfboard': 'surfboard:///install-config?url='
+                    'surfboard': 'surfboard:///install-config?url=',
+                    'singbox': 'sing-box://import-remote-profile?url='
+                };
+                const targetMap = {
+                    'clash': 'clash',
+                    'surge': 'surge',
+                    'shadowrocket': 'shadowrocket',
+                    'quanx': 'quanx',
+                    'v2ray': 'v2ray',
+                    'surfboard': 'surfboard',
+                    'singbox': 'singbox'
                 };
                 finalUrl = apiBaseUrl + '?target=' + targetMap[type] + '&url=' + encodeURIComponent(originalUrl);
                 clientName = clientNames[type];
@@ -4573,6 +4585,13 @@ async function renderUserDashboard(env, userInfo) {
                     </div>
                 </div>
                 <div class="sub-btn-wrapper">
+                    <button class="sub-btn" onclick="toggleSubDropdown('singbox')">📦 SingBox ▼</button>
+                    <div class="sub-dropdown" id="sub-dropdown-singbox">
+                        <div class="sub-dropdown-item" onclick="copySubOnly('singbox')">📋 复制 SingBox 订阅</div>
+                        <div class="sub-dropdown-item" onclick="importSub('singbox')">⬇️ 一键导入 SingBox</div>
+                    </div>
+                </div>
+                <div class="sub-btn-wrapper">
                     <button class="sub-btn" onclick="toggleSubDropdown('surge')">🌊 Surge ▼</button>
                     <div class="sub-dropdown" id="sub-dropdown-surge">
                         <div class="sub-dropdown-item" onclick="copySubOnly('surge')">📋 复制 Surge 订阅</div>
@@ -4679,6 +4698,7 @@ async function renderUserDashboard(env, userInfo) {
           return year + '-' + month + '-' + day;
         }
         
+        // 订阅转换后端配置
         const apiBaseUrl = 'https://url.v1.mk/sub';
         const subUrl = \`${subUrl}\`;
         const uuid = \`${userInfo.uuid}\`;
@@ -4727,17 +4747,19 @@ async function renderUserDashboard(env, userInfo) {
                 finalUrl = originalUrl;
                 clientName = '\u901a\u7528\u8ba2\u9605';
             } else {
-                const targetMap = {
-                    'clash': 'clash',
-                    'surge': 'surge',
-                    'shadowrocket': 'shadowrocket',
-                    'quanx': 'quanx'
-                };
                 const clientNames = {
                     'clash': 'Clash',
                     'surge': 'Surge',
                     'shadowrocket': 'Shadowrocket',
-                    'quanx': 'Quantumult X'
+                    'quanx': 'Quantumult X',
+                    'singbox': 'SingBox'
+                };
+                const targetMap = {
+                    'clash': 'clash',
+                    'surge': 'surge',
+                    'shadowrocket': 'shadowrocket',
+                    'quanx': 'quanx',
+                    'singbox': 'singbox'
                 };
                 finalUrl = apiBaseUrl + '?target=' + targetMap[type] + '&url=' + encodeURIComponent(originalUrl);
                 clientName = clientNames[type];
@@ -4771,23 +4793,26 @@ async function renderUserDashboard(env, userInfo) {
                 clientName = '\u901a\u7528\u5ba2\u6237\u7aef';
                 schemeUrl = originalUrl;
             } else {
-                const targetMap = {
-                    'clash': 'clash',
-                    'surge': 'surge',
-                    'shadowrocket': 'shadowrocket',
-                    'quanx': 'quanx'
-                };
                 const clientNames = {
                     'clash': 'Clash',
                     'surge': 'Surge',
                     'shadowrocket': 'Shadowrocket',
-                    'quanx': 'Quantumult X'
+                    'quanx': 'Quantumult X',
+                    'singbox': 'SingBox'
                 };
                 const schemeMap = {
                     'clash': 'clash://install-config?url=',
                     'surge': 'surge:///install-config?url=',
                     'shadowrocket': 'shadowrocket://add/',
-                    'quanx': 'quantumult-x:///add-resource?remote-resource='
+                    'quanx': 'quantumult-x:///add-resource?remote-resource=',
+                    'singbox': 'sing-box://import-remote-profile?url='
+                };
+                const targetMap = {
+                    'clash': 'clash',
+                    'surge': 'surge',
+                    'shadowrocket': 'shadowrocket',
+                    'quanx': 'quanx',
+                    'singbox': 'singbox'
                 };
                 finalUrl = apiBaseUrl + '?target=' + targetMap[type] + '&url=' + encodeURIComponent(originalUrl);
                 clientName = clientNames[type];

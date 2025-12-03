@@ -189,8 +189,10 @@ async function syncRemoteConfig(forceRefresh = false) {
             cachedData.users = data.users;
         }
         
-        // 获取官网地址（从 subUrl 中提取）
-        if (data.settings && data.settings.subUrl) {
+        // 获取官网地址（优先使用专门的 websiteUrl，否则使用 subUrl）
+        if (data.settings && data.settings.websiteUrl) {
+            cachedData.websiteUrl = data.settings.websiteUrl;
+        } else if (data.settings && data.settings.subUrl) {
             cachedData.websiteUrl = data.settings.subUrl;
         }
         

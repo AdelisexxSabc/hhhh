@@ -140,9 +140,9 @@ export default {
             const users = cachedData.users;
             
             // 检查路径中是否包含有效 UUID
-            for (const [uuid, name] of Object.entries(users)) {
+            for (const [uuid, userInfo] of Object.entries(users)) {
                 if (url.pathname.toLowerCase().includes(uuid.toLowerCase())) {
-                    return await handleSubscription(req, uuid, name);
+                    return await handleSubscription(req, uuid, userInfo);
                 }
             }
         }
@@ -184,9 +184,14 @@ async function syncRemoteConfig(forceRefresh = false) {
         
         const data = await response.json();
         
-        // 更新用户列表
+        // 更新用户列表（支持新格式：包含 expiry）
         if (data.users && typeof data.users === 'object') {
             cachedData.users = data.users;
+        }
+        
+        // 获取官网地址（从 subUrl 中提取）
+        if (data.settings && data.settings.subUrl) {
+            cachedData.websiteUrl = data.settings.subUrl;
         }
         
         // 更新设置
@@ -223,11 +228,18 @@ async function syncRemoteConfig(forceRefresh = false) {
 // =============================================================================
 // 订阅处理 - 生成 VLESS 订阅链接
 // =============================================================================
-async function handleSubscription(req, uuid, userName) {
+async function handleSubscription(req, uuid, userInfo) {
     const url = new URL(req.url);
     const workerDomain = url.hostname;
     
-    const links = generateVlessLinks(workerDomain, uuid, userName);
+    // 获取用户到期时间
+    const expiry = typeof userInfo === 'object' ? userInfo.expiry : null;
+    const userName = typeof userInfo === 'object' ? userInfo.name : userInfo;
+    
+    // 获取官网地址
+    const websiteUrl = cachedData.websiteUrl || '';
+    
+    const links = generateVlessLinks(workerDomain, uuid, userName, expiry, websiteUrl);
     const base64Content = btoa(links.join('\n'));
     
     return new Response(base64Content, {
@@ -242,11 +254,71 @@ async function handleSubscription(req, uuid, userName) {
 // =============================================================================
 // 生成 VLESS 订阅链接
 // =============================================================================
-function generateVlessLinks(workerDomain, uuid, userName) {
+function generateVlessLinks(workerDomain, uuid, userName, expiry, websiteUrl) {
     const links = [];
     const wsPath = encodeURIComponent('/?ed=2048');
     const protocol = 'vless';
     const domains = cachedData.settings.bestDomains || FALLBACK_CONFIG.bestDomains;
+    
+    // 格式化到期时间
+    function formatExpiry(timestamp) {
+        if (!timestamp) return '永久有效';
+        const d = new Date(timestamp);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    // 获取第一个节点的地址用于创建信息节点
+    let firstAddress = 'telecom.1412.tech:443';
+    if (domains.length > 0) {
+        const firstItem = domains[0];
+        const parts = firstItem.split('#');
+        let addressPart = parts[0].trim();
+        
+        // 处理地址和端口
+        if (addressPart.startsWith('[')) {
+            firstAddress = addressPart;
+        } else if (addressPart.includes('[') && addressPart.includes(']')) {
+            firstAddress = addressPart;
+        } else {
+            const colonCount = (addressPart.match(/:/g) || []).length;
+            if (colonCount > 1) {
+                const ipv6PortMatch = addressPart.match(/^(.+):(\d+)$/);
+                if (ipv6PortMatch && !isNaN(ipv6PortMatch[2])) {
+                    firstAddress = `[${ipv6PortMatch[1]}]:${ipv6PortMatch[2]}`;
+                } else {
+                    firstAddress = `[${addressPart}]:443`;
+                }
+            } else if (addressPart.includes(':')) {
+                firstAddress = addressPart;
+            } else {
+                firstAddress = `${addressPart}:443`;
+            }
+        }
+    }
+    
+    // 构建公共参数
+    const commonParams = new URLSearchParams({
+        encryption: 'none',
+        security: 'tls',
+        sni: workerDomain,
+        fp: 'chrome',
+        type: 'ws',
+        host: workerDomain,
+        path: wsPath
+    });
+    
+    // 添加官网信息节点（排第一）
+    const websiteDisplay = websiteUrl ? websiteUrl.replace(/^https?:\/\//, '') : '未设置官网';
+    const websiteLink = `${protocol}://${uuid}@${firstAddress}?${commonParams.toString()}#${encodeURIComponent('官网' + websiteDisplay)}`;
+    links.push(websiteLink);
+    
+    // 添加套餐到期时间节点（排第二）
+    const expiryDisplay = formatExpiry(expiry);
+    const expiryLink = `${protocol}://${uuid}@${firstAddress}?${commonParams.toString()}#${encodeURIComponent('套餐到期：' + expiryDisplay)}`;
+    links.push(expiryLink);
     
     // 排序: 只将 IPv6 IP 地址排到后面，手动添加的域名保持原位
     const sortedDomains = [...domains].sort((a, b) => {
