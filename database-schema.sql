@@ -111,3 +111,15 @@ CREATE INDEX IF NOT EXISTS idx_payment_records_status ON payment_records(status)
 ALTER TABLE orders ADD COLUMN payment_order_id TEXT;
 ALTER TABLE orders ADD COLUMN payment_trade_id TEXT;
 ALTER TABLE orders ADD COLUMN payment_type TEXT DEFAULT 'manual';
+
+-- 邀请码表
+CREATE TABLE IF NOT EXISTS invite_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    max_uses INTEGER NOT NULL DEFAULT 1,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    trial_days INTEGER NOT NULL DEFAULT 0,
+    remark TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
