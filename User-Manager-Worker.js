@@ -1003,21 +1003,22 @@ async function autoCleanupInactiveUsers(env) {
     const cleanupDays = settings.autoCleanupDays || 7;
     const cutoffTime = Date.now() - (cleanupDays * 24 * 60 * 60 * 1000);
     
-    console.log(`[定时任务] 开始清理 ${cleanupDays} 天内未登录的非活跃用户...`);
+    console.log(`[定时任务] 开始清理过期超过 ${cleanupDays} 天且未登录的用户...`);
     
     // 查找需要删除的用户账号
-    // 条件：(last_login 早于截止时间，或 last_login 为空且 created_at 早于截止时间)
-    // 排除：未激活用户（users表中 expiry 为 NULL 的用户）
+    // 条件：订阅已过期（expiry < 当前时间）且过期后超过指定天数未登录
+    // 排除：未激活用户（expiry 为 NULL）和订阅未过期的用户
     const { results: inactiveAccounts } = await env.DB.prepare(`
-      SELECT ua.id, ua.uuid, ua.username, ua.last_login, ua.created_at
+      SELECT ua.id, ua.uuid, ua.username, ua.last_login, ua.created_at, u.expiry
       FROM user_accounts ua
       INNER JOIN users u ON ua.uuid = u.uuid
       WHERE u.expiry IS NOT NULL
+        AND u.expiry < ?
         AND (
           (ua.last_login IS NOT NULL AND ua.last_login < ?)
-          OR (ua.last_login IS NULL AND ua.created_at < ?)
+          OR (ua.last_login IS NULL AND u.expiry < ?)
         )
-    `).bind(cutoffTime, cutoffTime).all();
+    `).bind(Date.now(), cutoffTime, cutoffTime).all();
     
     if (inactiveAccounts.length === 0) {
       console.log('[定时任务] 没有需要清理的非活跃用户');
