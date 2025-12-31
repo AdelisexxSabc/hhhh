@@ -1198,9 +1198,13 @@ async function handleAdminAdd(request, env) {
 
   let expiry = null;
   if (expiryDateStr) {
-    const date = new Date(expiryDateStr);
-    date.setHours(23, 59, 59, 999);
-    expiry = date.getTime();
+    // 将日期字符串解析为北京时间的当天 23:59:59
+    // expiryDateStr 格式为 YYYY-MM-DD
+    const [year, month, day] = expiryDateStr.split('-').map(Number);
+    // 创建北京时间 23:59:59，然后转换为UTC时间戳
+    // 北京时间 = UTC+8，所以需要减去8小时
+    const beijingEndOfDay = new Date(Date.UTC(year, month - 1, day, 23 - 8, 59, 59, 999));
+    expiry = beijingEndOfDay.getTime();
   }
 
   let targetUUIDs = [];
@@ -1270,9 +1274,13 @@ async function handleAdminUpdate(request, env) {
 
   let expiry = null;
   if (expiryDateStr) {
-    const date = new Date(expiryDateStr);
-    date.setHours(23, 59, 59, 999);
-    expiry = date.getTime();
+    // 将日期字符串解析为北京时间的当天 23:59:59
+    // expiryDateStr 格式为 YYYY-MM-DD
+    const [year, month, day] = expiryDateStr.split('-').map(Number);
+    // 创建北京时间 23:59:59，然后转换为UTC时间戳
+    // 北京时间 = UTC+8，所以需要减去8小时
+    const beijingEndOfDay = new Date(Date.UTC(year, month - 1, day, 23 - 8, 59, 59, 999));
+    expiry = beijingEndOfDay.getTime();
   }
 
   await env.DB.prepare("UPDATE users SET name = ?, expiry = ? WHERE uuid = ?")
@@ -2889,8 +2897,12 @@ async function handleAdminPanel(request, env, adminPath) {
         }
         
         function copySubByType(uuid, type) {
-            let domain = document.getElementById('subUrl').value.trim();
-            if (!domain) return toast('❌ 请先配置订阅地址');
+            let domainInput = document.getElementById('subUrl').value.trim();
+            if (!domainInput) return toast('❌ 请先配置订阅地址');
+            // 支持多个地址用逗号分隔，随机选择一个
+            const domainList = domainInput.split(',').map(d => d.trim()).filter(d => d);
+            if (domainList.length === 0) return toast('❌ 请先配置订阅地址');
+            let domain = domainList[Math.floor(Math.random() * domainList.length)];
             if (domain.endsWith('/')) domain = domain.slice(0, -1);
             if (!domain.startsWith('http')) domain = 'https://' + domain;
             const originalUrl = domain + '/' + uuid;
