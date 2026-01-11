@@ -1053,6 +1053,19 @@ function importData(req, res) {
         if (data.orders && data.orders.length > 0) {
             for (const order of data.orders) {
                 try {
+                    // 检查 user_id 和 plan_id 是否存在，避免外键约束错误
+                    const userExists = database.prepare("SELECT id FROM user_accounts WHERE id = ?").get(order.user_id);
+                    const planExists = database.prepare("SELECT id FROM subscription_plans WHERE id = ?").get(order.plan_id);
+                    
+                    if (!userExists) {
+                        console.error('导入订单跳过:', order.id, '用户不存在:', order.user_id);
+                        continue;
+                    }
+                    if (!planExists) {
+                        console.error('导入订单跳过:', order.id, '套餐不存在:', order.plan_id);
+                        continue;
+                    }
+                    
                     // 使用实际的表字段: user_id, plan_id, amount, status, created_at, paid_at
                     database.prepare(
                         "INSERT OR REPLACE INTO orders (id, user_id, plan_id, amount, status, created_at, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -1083,8 +1096,8 @@ function importData(req, res) {
             for (const invite of data.inviteCodes) {
                 try {
                     database.prepare(
-                        "INSERT OR REPLACE INTO invite_codes (id, code, trial_days, max_uses, used_count, enabled, created_at, expires_at, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    ).run(invite.id, invite.code, invite.trial_days || 0, invite.max_uses || 1, invite.used_count || 0, invite.enabled !== undefined ? invite.enabled : 1, invite.created_at, invite.expires_at, invite.remark || '');
+                        "INSERT OR REPLACE INTO invite_codes (id, code, trial_days, max_uses, used_count, enabled, created_at, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).run(invite.id, invite.code, invite.trial_days || 0, invite.max_uses || 1, invite.used_count || 0, invite.enabled !== undefined ? invite.enabled : 1, invite.created_at, invite.remark || '');
                     importedCounts.inviteCodes++;
                 } catch (e) {
                     console.error('导入邀请码失败:', invite.code, e.message);
