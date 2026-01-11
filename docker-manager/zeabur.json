@@ -1,0 +1,29 @@
+{
+  "$schema": "https://zeabur.com/schemas/zeabur.json",
+  "build": {
+    "type": "dockerfile",
+    "dockerfile": "Dockerfile"
+  },
+  "start": {
+    "command": "dumb-init node server.js"
+  },
+  "ports": [
+    {
+      "port": 3000,
+      "type": "http"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "PORT": "3000",
+    "ADMIN_PATH": "/admin",
+    "ADMIN_USERNAME": {
+      "description": "管理员用户名",
+      "default": "admin"
+    },
+    "ADMIN_PASSWORD": {
+      "description": "管理员密码",
+      "required": true
+    }
+  }
+}
