@@ -77,6 +77,7 @@ app.post('/api/admin/reset-uuid', adminRoutes.resetUserUUID);
 app.post('/api/admin/delete', adminRoutes.deleteUsers);
 app.post('/api/admin/status', adminRoutes.updateStatus);
 app.get('/api/admin/getUserAccount', adminRoutes.getUserAccount);
+app.get('/api/admin/users', adminRoutes.getAllUsers);
 app.get('/api/admin/user/:uuid', adminRoutes.getUserDetail);
 
 // 管理员 - 配置管理
@@ -139,9 +140,9 @@ app.get('/api/admin/statistics', adminRoutes.getStatistics);
 app.get(`${ADMIN_PATH}*`, async (req, res) => {
     const isLogged = await checkAdminSession(req);
     if (!isLogged) {
-        res.send(renderAdminLoginPage(ADMIN_PATH));
+        res.status(200).send(renderAdminLoginPage(ADMIN_PATH));
     } else {
-        res.send(await renderAdminPanel(ADMIN_PATH));
+        res.status(200).send(await renderAdminPanel(ADMIN_PATH));
     }
 });
 

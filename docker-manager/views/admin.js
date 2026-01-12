@@ -1,5 +1,5 @@
 /**
- * 管理员面板视图 - 完整版（含套餐和订单管理）
+ * 管理员面板视图 - Shadcn UI 风格
  */
 
 const db = require('../database');
@@ -28,492 +28,4272 @@ function formatBeijingDate(date) {
 }
 
 function renderAdminLoginPage(adminPath) {
-    return `<!DOCTYPE html><html><head><title>管理员登录</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;justify-content:center;align-items:center}.login-box{background:white;padding:40px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.2);width:100%;max-width:400px}.login-box h2{text-align:center;margin-bottom:30px;color:#333}.form-group{margin-bottom:20px}label{display:block;margin-bottom:8px;color:#666;font-size:14px}input[type=text],input[type=password]{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px}input:focus{outline:none;border-color:#667eea}button{width:100%;padding:14px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:6px;font-size:16px;cursor:pointer}button:hover{transform:translateY(-2px);box-shadow:0 5px 20px rgba(102,126,234,0.4)}.error{color:#ff4d4f;font-size:14px;margin-top:10px;text-align:center;display:none}.switch{position:relative;display:inline-block;width:44px;height:22px;cursor:pointer}.switch .slider{position:absolute;top:0;left:0;right:0;bottom:0;background:#d9d9d9;border-radius:22px;transition:0.4s}.switch .slider:before{content:'';position:absolute;height:18px;width:18px;left:2px;bottom:2px;background:white;border-radius:50%;transition:0.4s}.switch input:checked+.slider{background:#52c41a}.switch input:checked+.slider:before{transform:translateX(22px)}</style></head><body><div class="login-box"><h2>🔐 管理员登录</h2><form id="loginForm"><div class="form-group"><label>用户名</label><input type="text" id="username" name="username" required></div><div class="form-group"><label>密码</label><input type="password" id="password" name="password" required></div><button type="submit">登 录</button><div class="error" id="errorMsg"></div></form></div><script>
-document.getElementById('loginForm').addEventListener('submit',async function(e){e.preventDefault();const errorMsg=document.getElementById('errorMsg');errorMsg.style.display='none';try{const username=document.getElementById('username').value;const password=document.getElementById('password').value;const response=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username,password:password})});const result=await response.json();if(result.success){window.location.href='${adminPath}';}else{errorMsg.textContent=result.error||'登录失败';errorMsg.style.display='block';}}catch(e){errorMsg.textContent='网络错误，请重试';errorMsg.style.display='block';}});</script></body></html>`;
+    return `<!DOCTYPE html><html><head><title>管理员登录</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;justify-content:center;align-items:center}.login-box{background:white;padding:40px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.2);width:100%;max-width:400px}.login-box h2{text-align:center;margin-bottom:30px;color:#333}.form-group{margin-bottom:20px}label{display:block;margin-bottom:8px;color:#666;font-size:14px}input[type=text],input[type=password]{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px}input:focus{outline:none;border-color:#667eea}button{width:100%;padding:14px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:6px;font-size:16px;cursor:pointer}button:hover{transform:translateY(-2px);box-shadow:0 5px 20px rgba(102,126,234,0.4)}.error{color:#ff4d4f;font-size:14px;margin-top:10px;text-align:center;display:none}</style></head><body><div class="login-box"><h2>🔐 管理员登录</h2><form id="loginForm"><div class="form-group"><label>用户名</label><input type="text" id="username" name="username" required></div><div class="form-group"><label>密码</label><input type="password" id="password" name="password" required></div><button type="submit">登 录</button><div class="error" id="errorMsg"></div></form></div><script>
+document.getElementById('loginForm').addEventListener('submit',async function(e){e.preventDefault();const errorMsg=document.getElementById('errorMsg');errorMsg.style.display='none';try{const formData=new FormData(this);const response=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:formData.get('username'),password:formData.get('password')})});const result=await response.json();if(result.success){window.location.href='${adminPath}';}else{errorMsg.textContent=result.error||'登录失败';errorMsg.style.display='block';}}catch(e){errorMsg.textContent='网络错误，请重试';errorMsg.style.display='block';}});</script></body></html>`;
 }
 
-async function renderAdminPanel(adminPath) {
-    const usersData = db.getAllUsers();
-    const settings = db.getSettings() || {};
-    const siteName = settings.siteName || "CFly";
-    
-    // 生成用户列表
-    const userRows = usersData.map(u => {
-        const isExpired = u.expiry && u.expiry < Date.now();
-        const isEnabled = u.enabled;
-        const expiryText = u.expiry ? formatBeijingDateTime(u.expiry) : '未激活';
-        const expiryVal = u.expiry ? formatBeijingDate(u.expiry) : '';
-        const createDate = u.createAt ? formatBeijingDateTime(u.createAt) : '-';
-        let statusHtml = !u.expiry ? '<span class="tag disabled">未激活</span>' : 
-            (isExpired ? '<span class="tag expired">已过期</span>' : 
-            (!isEnabled ? '<span class="tag disabled">已禁用</span>' : '<span class="tag active">正常</span>'));
-        const safeName = (u.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/`/g, '\\`').replace(/\$/g, '\\$');
-        const safeUUID = (u.uuid || '').replace(/'/g, "\\'");
-        
-        return `<tr><td><input type="checkbox" class="u-check" value="${safeUUID}"></td><td class="mono" onclick="copy('${safeUUID}')">${u.uuid}</td><td>${u.name}</td><td>${createDate}</td><td>${expiryText}</td><td>${statusHtml}</td><td class="actions"><div class="dropdown"><button class="btn-action btn-copy" onclick="toggleDropdown(event,'${safeUUID}')">订阅 ▼</button><div class="dropdown-content" id="dropdown-${u.uuid}"><div class="dropdown-item original" onclick="copySubByType('${safeUUID}','original')"><span>🔗</span> 原始订阅</div><div class="dropdown-item clash" onclick="copySubByType('${safeUUID}','clash')"><span>⚡</span> Clash</div><div class="dropdown-item singbox" onclick="copySubByType('${safeUUID}','singbox')"><span>📦</span> SingBox</div><div class="dropdown-item surge" onclick="copySubByType('${safeUUID}','surge')"><span>🌊</span> Surge</div><div class="dropdown-item shadowrocket" onclick="copySubByType('${safeUUID}','shadowrocket')"><span>🚀</span> Shadowrocket</div><div class="dropdown-item quantumult" onclick="copySubByType('${safeUUID}','quanx')"><span>🔮</span> Quantumult X</div><div class="dropdown-item v2ray" onclick="copySubByType('${safeUUID}','v2ray')"><span>✈️</span> V2Ray/Xray</div><div class="dropdown-item surfboard" onclick="copySubByType('${safeUUID}','surfboard')"><span>🏄</span> Surfboard</div></div></div><button class="btn-action btn-edit" onclick="openEdit('${safeUUID}','${safeName}','${expiryVal}')">编辑</button><button class="btn-action" style="background:#722ed1" onclick="resetUUID('${safeUUID}')">重置UUID</button>${isEnabled&&!isExpired?`<button class="btn-action btn-secondary" onclick="toggleStatus('${safeUUID}',false)">禁用</button>`:''}${!isEnabled&&!isExpired?`<button class="btn-action btn-success" onclick="toggleStatus('${safeUUID}',true)">启用</button>`:''}<button class="btn-action btn-del" onclick="delUser('${safeUUID}')">删除</button></td></tr>`;
-    }).join('');
-
-    return `<!DOCTYPE html><html lang="zh-CN"><head><title>${siteName} 控制面板</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>:root{--primary:#1890ff;--bg:#f0f2f5;--danger:#ff4d4f;--success:#52c41a;--warning:#faad14;--purple:#722ed1;--grey:#bfbfbf}*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:#333;height:100vh;overflow:hidden}.layout{display:flex;height:100vh}.sidebar{width:240px;background:#001529;color:white;overflow-y:auto}.sidebar-header{padding:20px;border-bottom:1px solid rgba(255,255,255,0.1)}.sidebar-header h1{color:white;font-size:18px}.sidebar-header .date{font-size:12px;color:rgba(255,255,255,0.65);margin-top:5px}.menu{list-style:none;padding:10px 0}.menu-item{padding:12px 20px;cursor:pointer;transition:all 0.3s;border-left:3px solid transparent;display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.85)}.menu-item:hover{background:rgba(255,255,255,0.1);color:white}.menu-item.active{background:var(--primary);border-left-color:#fff;color:white}.menu-item-icon{font-size:16px;width:20px;text-align:center}.main-content{flex:1;overflow-y:auto;background:var(--bg)}.content-header{background:white;padding:16px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.08);position:sticky;top:0;z-index:10}.content-header h2{font-size:20px;margin:0}.content-body{padding:24px}.card{background:white;padding:20px;border-radius:8px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}.card h3{margin-bottom:15px;color:#333;border-bottom:1px solid #eee;padding-bottom:10px}.section{display:none}.section.active{display:block}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}label{display:block;margin-bottom:8px;font-size:14px;color:#666;font-weight:600}input[type=text],input[type=date],input[type=number],input[type=password],textarea,select{width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-family:inherit}input:focus,textarea:focus,select:focus{border-color:var(--primary);outline:none}textarea{resize:vertical;min-height:80px}button{padding:8px 16px;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px}button:hover{opacity:0.9}button:disabled{background:#ccc!important;cursor:not-allowed}.btn-primary{background:var(--primary)}.btn-danger{background:var(--danger)}.btn-success{background:var(--success)}.btn-warning{background:var(--warning)}.btn-secondary{background:var(--grey)}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #f0f0f0}th{background:#fafafa;color:#666;font-weight:600}tr:hover{background:#fdfdfd}.mono{font-family:monospace;color:var(--primary);cursor:pointer}.tag{font-size:12px;padding:2px 8px;border-radius:10px;font-weight:500}.tag.active{color:var(--success);background:#f6ffed;border:1px solid #b7eb8f}.tag.expired{color:var(--danger);background:#fff1f0;border:1px solid #ffa39e}.tag.disabled{color:#999;background:#f5f5f5;border:1px solid #d9d9d9}.actions{white-space:nowrap}.btn-action{padding:4px 10px;font-size:12px;margin-right:4px}.btn-copy{background:var(--purple)}.btn-edit{background:var(--warning)}.btn-del{background:#ff7875}.dropdown{position:relative;display:inline-block}.dropdown-content{display:none;position:absolute;right:0;top:100%;background:white;min-width:160px;box-shadow:0 4px 12px rgba(0,0,0,0.15);border-radius:6px;z-index:100;overflow:hidden}.dropdown-content.show{display:block}.dropdown-item{padding:10px 15px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background 0.2s}.dropdown-item:hover{background:#f5f5f5}.dropdown-item span{font-size:14px}.dropdown-item.original{color:#722ed1}.dropdown-item.clash{color:#1890ff}.dropdown-item.singbox{color:#52c41a}.dropdown-item.surge{color:#13c2c2}.dropdown-item.shadowrocket{color:#ff4d4f}.dropdown-item.quantumult{color:#eb2f96}.dropdown-item.v2ray{color:#faad14}.dropdown-item.surfboard{color:#2f54eb}.config-item{display:flex;align-items:center;padding:8px 10px;background:white;border-bottom:1px solid #eee;cursor:move}.config-item:hover{background:#fafafa}.config-item.dragging{opacity:0.5;background:#e6f7ff}.drag-handle{cursor:move;color:#999;margin-right:10px;font-size:14px}.del-btn{color:#ff4d4f;cursor:pointer;padding:0 8px;font-size:16px;background:none;border:none}.batch-bar{margin-bottom:15px;display:none;gap:10px;align-items:center;background:#e6f7ff;padding:10px;border-radius:4px;border:1px solid #91d5ff}.batch-bar.show{display:flex}.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;z-index:100}.modal{background:white;padding:25px;border-radius:8px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto}.modal h3{margin-bottom:20px}#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:white;padding:10px 20px;border-radius:4px;opacity:0;pointer-events:none;transition:0.3s;z-index:200}#toast.show{opacity:1;bottom:50px}@media(max-width:768px){.grid{grid-template-columns:1fr}}.switch{position:relative;display:inline-block;width:44px;height:22px;cursor:pointer}.switch .slider{position:absolute;top:0;left:0;right:0;bottom:0;background:#d9d9d9;border-radius:22px;transition:0.4s}.switch .slider:before{content:'';position:absolute;height:18px;width:18px;left:2px;bottom:2px;background:white;border-radius:50%;transition:0.4s}.switch input:checked+.slider{background:#52c41a}.switch input:checked+.slider:before{transform:translateX(22px)}</style></head><body><div class="layout"><div class="sidebar"><div class="sidebar-header"><h1>${siteName}</h1><div class="date">${formatBeijingDate(Date.now())}</div><button onclick="adminLogout()" style="margin-top:10px;width:100%;padding:8px;background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);border-radius:4px;cursor:pointer;font-size:13px">🚪 退出登录</button></div><ul class="menu"><li class="menu-item active" data-section="dashboard" onclick="switchSection('dashboard')"><span class="menu-item-icon">📊</span><span>仪表盘</span></li><li class="menu-item" data-section="users" onclick="switchSection('users')"><span class="menu-item-icon">👥</span><span>用户管理</span></li><li class="menu-item" data-section="proxy-ips" onclick="switchSection('proxy-ips')"><span class="menu-item-icon">🌐</span><span>反代IP</span></li><li class="menu-item" data-section="best-domains" onclick="switchSection('best-domains')"><span class="menu-item-icon">⭐</span><span>优选域名</span></li><li class="menu-item" data-section="plans" onclick="switchSection('plans')"><span class="menu-item-icon">📦</span><span>套餐管理</span></li><li class="menu-item" data-section="orders" onclick="switchSection('orders')"><span class="menu-item-icon">💳</span><span>订单管理</span></li><li class="menu-item" data-section="announcements" onclick="switchSection('announcements')"><span class="menu-item-icon">📢</span><span>公告管理</span></li><li class="menu-item" data-section="payment" onclick="switchSection('payment')"><span class="menu-item-icon">💰</span><span>支付渠道</span></li><li class="menu-item" data-section="invites" onclick="switchSection('invites')"><span class="menu-item-icon">🎫</span><span>邀请码</span></li><li class="menu-item" data-section="password" onclick="switchSection('password')"><span class="menu-item-icon">🔐</span><span>修改密码</span></li></ul></div><div class="main-content"><div id="section-dashboard" class="section active"><div class="content-header"><h2>📊 仪表盘</h2></div><div class="content-body">
-<div class="card"><h3 style="margin-bottom:15px">系统设置</h3>
-<div style="padding:15px;background:#f0f5ff;border-radius:8px;margin-bottom:15px"><div style="margin-bottom:8px"><span style="font-weight:600;display:block;margin-bottom:4px">🏷️ 站点名称</span><div style="font-size:13px;color:#666">用于显示需要站点名称的地方</div></div><input type="text" id="siteName" value="${settings.siteName||'CFly'}" onchange="updateSystemSettings()" placeholder="请输入站点名称，例如：CFly" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px"></div>
-<div style="padding:15px;background:#f8f9fa;border-radius:8px;margin-bottom:15px"><label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><span style="font-weight:600;display:block;margin-bottom:4px">开放用户注册</span><div style="font-size:13px;color:#666">开启后，用户可以自助注册账号；关闭后，只能由管理员手动添加用户</div></div><div class="switch" onclick="toggleSwitch(event,'enableRegisterCheck')"><input type="checkbox" id="enableRegisterCheck" ${settings.enableRegister?'checked':''} onchange="updateSystemSettings()" style="display:none"><span class="slider" style="background:${settings.enableRegister?'#52c41a':'#d9d9d9'}"></span></div></label></div>
-<div style="padding:15px;background:#fff7e6;border-radius:8px;margin-bottom:15px"><label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><span style="font-weight:600;display:block;margin-bottom:4px">自动审核订单</span><div style="font-size:13px;color:#666">开启后，用户订购<b style="color:#ff4d4f">免费套餐（价格为0）</b>将自动审核通过；付费套餐仍需等待支付或手动审核</div></div><div class="switch" onclick="toggleSwitch(event,'autoApproveOrderCheck')"><input type="checkbox" id="autoApproveOrderCheck" ${settings.autoApproveOrder?'checked':''} onchange="updateSystemSettings()" style="display:none"><span class="slider" style="background:${settings.autoApproveOrder?'#52c41a':'#d9d9d9'}"></span></div></label></div>
-<div style="padding:15px;background:#f6ffed;border-radius:8px;margin-bottom:15px"><label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><span style="font-weight:600;display:block;margin-bottom:4px">🎁 新用户注册试用</span><div style="font-size:13px;color:#666">开启后，新注册用户自动获得免费试用时长；关闭后新用户需购买套餐才能使用</div></div><div class="switch" onclick="toggleSwitch(event,'enableTrialCheck')"><input type="checkbox" id="enableTrialCheck" ${settings.enableTrial?'checked':''} onchange="updateSystemSettings()" style="display:none"><span class="slider" style="background:${settings.enableTrial?'#52c41a':'#d9d9d9'}"></span></div></label><div id="trialDaysDiv" style="margin-top:12px;${settings.enableTrial?'':'opacity:0.5;pointer-events:none;'}"><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">试用时长（天）</label><select id="trialDays" onchange="updateSystemSettings()" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"><option value="1" ${settings.trialDays==1?'selected':''}>1 天</option><option value="3" ${settings.trialDays==3?'selected':''}>3 天</option><option value="7" ${!settings.trialDays||settings.trialDays==7?'selected':''}>7 天</option><option value="14" ${settings.trialDays==14?'selected':''}>14 天</option><option value="30" ${settings.trialDays==30?'selected':''}>30 天</option></select></div></div>
-<div style="padding:15px;background:#e6fffb;border-radius:8px;margin-bottom:15px"><label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><span style="font-weight:600;display:block;margin-bottom:4px">🎫 注册需要邀请码</span><div style="font-size:13px;color:#666">开启后，用户注册时必须填写有效的邀请码；邀请码在"邀请码管理"中生成</div></div><div class="switch" onclick="toggleSwitch(event,'requireInviteCodeCheck')"><input type="checkbox" id="requireInviteCodeCheck" ${settings.requireInviteCode?'checked':''} onchange="updateSystemSettings()" style="display:none"><span class="slider" style="background:${settings.requireInviteCode?'#52c41a':'#d9d9d9'}"></span></div></label></div>
-<div style="padding:15px;background:#f0f5ff;border-radius:8px;margin-bottom:15px"><div style="margin-bottom:12px"><span style="font-weight:600;display:block;margin-bottom:4px">⏱️ 订单过期时间设置</span><div style="font-size:13px;color:#666">设置待审核订单和支付订单的自动过期时间</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:15px"><div><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">待审核订单过期时间</label><select id="pendingOrderExpiry" onchange="updateSystemSettings()" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"><option value="0" ${!settings.pendingOrderExpiry||settings.pendingOrderExpiry==0?'selected':''}>永不过期</option><option value="30" ${settings.pendingOrderExpiry==30?'selected':''}>30分钟</option><option value="60" ${settings.pendingOrderExpiry==60?'selected':''}>1小时</option><option value="120" ${settings.pendingOrderExpiry==120?'selected':''}>2小时</option><option value="360" ${settings.pendingOrderExpiry==360?'selected':''}>6小时</option><option value="720" ${settings.pendingOrderExpiry==720?'selected':''}>12小时</option><option value="1440" ${settings.pendingOrderExpiry==1440?'selected':''}>24小时</option></select></div><div><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">支付订单过期时间</label><select id="paymentOrderExpiry" onchange="updateSystemSettings()" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"><option value="15" ${!settings.paymentOrderExpiry||settings.paymentOrderExpiry==15?'selected':''}>15分钟</option><option value="30" ${settings.paymentOrderExpiry==30?'selected':''}>30分钟</option><option value="60" ${settings.paymentOrderExpiry==60?'selected':''}>1小时</option><option value="120" ${settings.paymentOrderExpiry==120?'selected':''}>2小时</option></select></div></div></div>
-<div style="padding:15px;background:#e6fffb;border-radius:8px;margin-bottom:15px"><div style="margin-bottom:12px"><span style="font-weight:600;display:block;margin-bottom:4px">🔗 用户前端快捷链接</span><div style="font-size:13px;color:#666">配置用户面板右上角显示的快捷链接（如TG客服、官方群组等）</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:15px"><div><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">链接1 名称</label><input type="text" id="customLink1Name" value="${settings.customLink1Name||''}" onchange="updateSystemSettings()" placeholder="例如：TG客服" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"></div><div><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">链接1 地址</label><input type="text" id="customLink1Url" value="${settings.customLink1Url||''}" onchange="updateSystemSettings()" placeholder="例如：https://t.me/xxx" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"></div><div><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">链接2 名称</label><input type="text" id="customLink2Name" value="${settings.customLink2Name||''}" onchange="updateSystemSettings()" placeholder="例如：官方群组" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"></div><div><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">链接2 地址</label><input type="text" id="customLink2Url" value="${settings.customLink2Url||''}" onchange="updateSystemSettings()" placeholder="例如：https://t.me/xxx" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:4px"></div></div></div>
-<div style="padding:15px;background:#fff1f0;border-radius:8px;margin-bottom:15px"><label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><span style="font-weight:600;display:block;margin-bottom:4px">🧹 自动清理非活跃用户</span><div style="font-size:13px;color:#666">自动删除指定天数内未登录的非活跃用户账号</div></div><div class="switch" onclick="toggleSwitch(event,'enableAutoCleanupCheck')"><input type="checkbox" id="enableAutoCleanupCheck" ${settings.enableAutoCleanup?'checked':''} onchange="updateSystemSettings()" style="display:none"><span class="slider" style="background:${settings.enableAutoCleanup?'#52c41a':'#d9d9d9'}"></span></div></label><div id="autoCleanupDiv" style="margin-top:12px;${settings.enableAutoCleanup?'':'opacity:0.5;pointer-events:none;'}"><label style="font-size:13px;color:#666;display:block;margin-bottom:5px">保留天数：</label><div style="display:flex;align-items:center;gap:10px"><input type="number" id="autoCleanupDays" value="${settings.autoCleanupDays||7}" min="1" max="365" onchange="updateSystemSettings()" style="width:80px;padding:8px;border:1px solid #d9d9d9;border-radius:4px"><span style="font-size:13px;color:#666">天（超过此天数未登录的用户将被自动删除）</span></div></div></div>
-</div>
-<div class="card"><h3 style="margin-bottom:15px">系统概览</h3><div class="grid" style="grid-template-columns:repeat(4,1fr);gap:15px"><div style="padding:20px;background:#e6f7ff;border-radius:8px;text-align:center"><div style="font-size:32px;font-weight:bold;color:var(--primary)">${usersData.length}</div><div style="margin-top:8px;color:#666">总用户数</div></div><div style="padding:20px;background:#f6ffed;border-radius:8px;text-align:center"><div style="font-size:32px;font-weight:bold;color:var(--success)">${usersData.filter(u=>u.enabled&&(!u.expiry||u.expiry>Date.now())).length}</div><div style="margin-top:8px;color:#666">活跃用户</div></div><div style="padding:20px;background:#fff7e6;border-radius:8px;text-align:center"><div style="font-size:32px;font-weight:bold;color:var(--warning)" id="dashConfigNodes">0</div><div style="margin-top:8px;color:#666">配置节点数</div></div><div style="padding:20px;background:#fff1f0;border-radius:8px;text-align:center"><div style="font-size:32px;font-weight:bold;color:var(--danger)">${usersData.filter(u=>u.expiry&&u.expiry<Date.now()).length}</div><div style="margin-top:8px;color:#666">已过期用户</div></div></div></div>
-<div class="card"><h3 style="margin-bottom:15px">快捷操作</h3><div style="display:flex;gap:10px;flex-wrap:wrap"><button onclick="switchSection('proxy-ips')" class="btn-primary">🌐 反代 IP</button><button onclick="switchSection('best-domains')" class="btn-primary">⭐ 优选域名</button><button onclick="switchSection('users')" class="btn-primary">👥 用户管理</button></div></div>
-<div class="card"><h3 style="margin-bottom:15px">📦 数据备份</h3><div style="padding:15px;background:#f6ffed;border-radius:8px;margin-bottom:15px"><div style="margin-bottom:10px"><span style="font-weight:600;display:block;margin-bottom:4px">📥 导出全部数据</span><div style="font-size:13px;color:#666">导出用户、设置、套餐、订单、公告、邀请码等所有数据为 JSON 文件</div></div><button onclick="exportAllData()" class="btn-success" style="margin-top:10px">📥 导出数据</button></div><div style="padding:15px;background:#e6f7ff;border-radius:8px;margin-bottom:15px"><div style="margin-bottom:10px"><span style="font-weight:600;display:block;margin-bottom:4px">📤 导入数据</span><div style="font-size:13px;color:#666">从备份文件恢复数据，将覆盖现有数据，请谨慎操作</div></div><input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importAllDataFile(this)"><button onclick="document.getElementById('importFileInput').click()" class="btn-primary" style="margin-top:10px">📤 选择文件导入</button></div><div style="padding:10px;background:#fff7e6;border-radius:4px;font-size:12px;color:#d46b08">⚠️ 导入操作会覆盖现有数据，建议先导出当前数据作为备份</div></div>
-</div></div><div id="section-users" class="section"><div class="content-header"><h2>👥 用户管理</h2></div><div class="content-body"><div class="card"><h3>添加用户</h3><div class="grid"><div><label>用户名称</label><input type="text" id="addName" placeholder="用户备注名"></div><div><label>到期日期</label><input type="date" id="addExpiry"></div></div><div class="grid" style="margin-top:15px"><div><label>前端用户名</label><input type="text" id="addFrontUsername" placeholder="不填则随机生成"></div><div><label>前端密码</label><input type="password" id="addFrontPassword" placeholder="不填则与用户名相同"></div></div><div style="margin-top:15px"><label>批量UUID导入</label><textarea id="addUUIDs" placeholder="一行一个UUID，支持逗号分隔&#10;留空则自动生成单个UUID" style="min-height:80px"></textarea></div><div style="margin-top:15px"><button onclick="addUser()" class="btn-primary">添加用户</button></div></div><div class="card"><h3>用户列表 (${usersData.length})</h3><div class="batch-bar" id="batchBar"><span>已选 <b id="selCount">0</b> 个用户：</span><button onclick="batchEnable()" class="btn-success">批量启用</button><button onclick="batchDisable()" class="btn-warning">批量禁用</button><button onclick="batchDelete()" class="btn-danger">批量删除</button></div><div style="overflow-x:auto"><table><thead><tr><th><input type="checkbox" id="checkAll" onchange="toggleCheckAll()"></th><th>UUID</th><th>名称</th><th>创建时间</th><th>到期时间</th><th>状态</th><th>操作</th></tr></thead><tbody>${userRows}</tbody></table></div></div></div></div><div id="section-proxy-ips" class="section"><div class="content-header"><h2>🌐 反代 IP 配置</h2></div><div class="content-body">
-<div class="card"><h3 style="margin-bottom:15px">节点订阅地址</h3>
-<div style="margin-bottom:20px;padding:15px;background:#fff7e6;border:1px solid #ffd591;border-radius:4px"><label style="color:#d46b08">节点订阅地址 (用于生成订阅链接)</label><input type="text" id="subUrl" value="${settings.subUrl||''}" placeholder="支持多个地址用英文逗号分隔，用户复制时随机获取一个"><div style="margin-top:8px;font-size:12px;color:#666">💡 支持多个地址，用英文逗号(,)分隔，用户复制订阅时会随机分配一个地址</div></div>
-<div style="margin-bottom:20px;padding:15px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:4px"><label style="color:#0050b3">官网地址 (显示在订阅节点列表中)</label><input type="text" id="websiteUrl" value="${settings.websiteUrl||''}" placeholder="请输入官网地址, 例如: example.com (不需要加 https://)"><div style="margin-top:8px;font-size:12px;color:#666">💡 此地址会显示在订阅节点的别名中，方便用户识别官网</div></div>
-<div style="margin-bottom:20px;padding:15px;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px"><label style="color:#e65100">网站基础URL (用于支付回调)</label><input type="text" id="baseUrl" value="${settings.baseUrl||''}" onchange="updateSystemSettings()" placeholder="例如: https://ideal-dollop-r45wwvv95vjqhpqp-3000.app.github.dev"><div style="margin-top:8px;font-size:12px;color:#666">💡 填写完整的网站访问地址，用于生成支付回调URL。留空则自动获取当前访问地址（可能不准确）</div></div>
-</div>
-<div class="card"><h3 style="margin-bottom:15px">默认反代 IP 列表</h3>
-<div style="margin-bottom:10px;padding:10px;background:#f0f9ff;border:1px solid #bae7ff;border-radius:4px;font-size:13px;color:#0050b3">💡 <b>智能提示：</b>在代理地址中包含地区标识（如 HK/JP/US/SG），系统会根据目标地址自动选择同地区代理，提升连接速度。</div>
-<div style="margin-bottom:15px"><textarea id="proxyIPInput" placeholder="批量添加，一行一个&#10;支持地理位置标识，节点会智能选择就近代理&#10;例如: ProxyIP.HK.example.net:443&#10;例如: ProxyIP.JP.example.net&#10;例如: 1.2.3.4 (自动补全:443)" style="width:100%;min-height:100px;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-family:monospace"></textarea></div>
-<div style="margin-bottom:15px;display:flex;gap:10px"><button onclick="addProxyIPs()" class="btn-success">添加到列表</button><button onclick="clearProxyIPs()" class="btn-danger">清空列表</button></div>
-<div id="proxyIPList" style="border:1px solid #eee;border-radius:4px;padding:10px;max-height:200px;overflow-y:auto;background:#fafafa;margin-bottom:15px"></div>
-<div style="text-align:right"><button onclick="saveProxySettings()" class="btn-primary" style="padding:10px 30px">保存配置</button></div>
-</div></div></div><div id="section-best-domains" class="section"><div class="content-header"><h2>⭐ 优选域名管理</h2></div><div class="content-body"><div class="card"><div style="margin-bottom:20px;padding:15px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:4px;font-size:13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:16px">ℹ️</span><strong style="color:#0050b3">关于定时自动更新功能</strong></div><div style="color:#096dd9;line-height:1.6"><p style="margin:5px 0">• <strong>Docker部署</strong>: 支持通过cron定时任务自动更新优选IP</p><p style="margin:5px 0">• <strong>手动获取</strong>: 点击下方按钮立即获取最新优选IP</p><p style="margin:5px 0">• <strong>Cron 表达式</strong>: <code style="background:#fff;padding:2px 6px;border-radius:3px">*/15 * * * *</code> (每15分钟执行)</p><p style="margin:5px 0">• <strong>下次更新</strong>: <span id="nextUpdateCountdown" style="color:#ff4d4f;font-weight:600">计算中...</span></p></div></div><h3>优选域名列表</h3><div style="margin-bottom:15px"><textarea id="bestDomainInput" placeholder="批量添加，一行一个&#10;格式: 域名/IP:端口#别名&#10;例如: www.visa.com:443#香港&#10;例如: 104.16.88.20:443#美国" style="width:100%;min-height:100px;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-family:monospace"></textarea></div><div style="margin-bottom:15px;display:flex;gap:10px"><button onclick="addBestDomains()" class="btn-success">批量添加</button><button onclick="fetchBestIPs('v4')" class="btn-primary" style="flex:1">🚀 自动获取 IPv4 优选</button><button onclick="fetchBestIPs('v6')" class="btn-primary" style="flex:1">🚀 自动获取 IPv6 优选</button><button onclick="clearBestDomains()" class="btn-danger">清空列表</button></div><div id="bestDomainList" style="border:1px solid #eee;border-radius:4px;padding:10px;max-height:300px;overflow-y:auto;background:#fafafa;min-height:100px"></div><div style="margin-top:15px;text-align:right"><button onclick="saveBestDomainSettings()" class="btn-primary" style="width:120px">保存配置</button></div></div></div></div><div id="section-plans" class="section"><div class="content-header"><h2>📦 套餐管理</h2></div><div class="content-body"><div class="card"><h3>添加新套餐</h3><div class="grid"><div><label>套餐名称</label><input type="text" id="planName" placeholder="例如：月度套餐"></div><div><label>时长(天)</label><input type="number" id="planDuration" placeholder="30" min="1"></div></div><div style="margin-top:10px"><label>套餐描述</label><textarea id="planDescription" placeholder="套餐说明..." style="min-height:60px"></textarea></div><div style="margin-top:10px"><label>价格(¥)</label><input type="number" id="planPrice" placeholder="0" min="0" step="0.01"></div><div style="margin-top:15px"><button onclick="addPlan()" class="btn-primary">添加套餐</button></div></div><div class="card"><h3>套餐列表</h3><div id="plansList">加载中...</div></div></div></div><div id="section-orders" class="section"><div class="content-header"><h2>💳 订单管理</h2></div><div class="content-body"><div class="card"><div style="margin-bottom:15px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:15px"><h3 style="margin:0">订单列表</h3><select id="orderStatusFilter" onchange="loadOrders()" style="padding:5px 10px;border:1px solid #d9d9d9;border-radius:4px"><option value="all" selected>全部订单</option><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已拒绝</option></select></div><div id="orderBatchBar" style="display:none;align-items:center;gap:10px"><span>已选 <b id="orderSelCount">0</b> 个订单：</span><button onclick="batchOrderAction('approve')" class="btn-action" style="background:#52c41a">批量通过</button><button onclick="batchOrderAction('reject')" class="btn-action btn-del">批量拒绝</button></div></div><div id="ordersList">加载中...</div></div></div></div><div id="section-announcements" class="section"><div class="content-header"><h2>📢 公告管理</h2></div><div class="content-body"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><h3 style="margin:0">公告列表</h3><button onclick="openAddAnnouncement()" class="btn-primary">+ 添加公告</button></div><div id="announcementsList">加载中...</div></div></div></div><div id="section-payment" class="section"><div class="content-header"><h2>💰 支付通道配置</h2></div><div class="content-body">
-<div class="card">
-<div style="margin-bottom:20px;padding:15px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:16px">ℹ️</span><strong style="color:#0050b3">BEpusdt 对接说明</strong></div><div style="color:#096dd9;line-height:1.6;font-size:14px"><p style="margin:5px 0">• 支持对接 <a href="https://github.com/v03413/BEpusdt" target="_blank" style="color:#1890ff">BEpusdt</a> USDT 收款网关</p><p style="margin:5px 0">• API 地址填写 BEpusdt 服务地址 (如: https://epusdt.example.com)</p><p style="margin:5px 0">• API Token 在 BEpusdt 的 conf.toml 中配置</p><p style="margin:5px 0">• 支持多种交易类型: usdt.trc20, usdt.polygon, usdt.arbitrum 等</p></div></div>
-<h3 style="margin-bottom:15px">添加支付通道</h3>
-<div class="grid"><div><label>通道名称</label><input type="text" id="payChannelName" placeholder="例如：USDT-TRC20"></div><div><label>通道代码</label><input type="text" id="payChannelCode" placeholder="例如：usdt.trc20"></div></div>
-<div style="margin-top:10px"><label>API 地址</label><input type="text" id="payChannelApiUrl" placeholder="BEpusdt 服务地址，例如：https://epusdt.example.com"></div>
-<div style="margin-top:10px"><label>API Token</label><input type="text" id="payChannelApiToken" placeholder="BEpusdt API 认证令牌"></div>
-<div style="margin-top:15px"><button onclick="savePaymentChannel()" class="btn-primary">添加通道</button></div>
-</div>
-<div class="card"><h3 style="margin-bottom:15px">支付通道列表</h3><div id="paymentChannelsList"></div></div></div></div><div id="section-invites" class="section"><div class="content-header"><h2>🎫 邀请码管理</h2></div><div class="content-body"><div class="card"><div style="margin-bottom:20px;padding:15px;background:#f6ffed;border:1px solid #b7eb8f;border-radius:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:16px">💡</span><strong style="color:#389e0d">邀请码使用说明</strong></div><div style="color:#52c41a;line-height:1.6;font-size:14px"><p style="margin:5px 0">• 开启"开放用户注册"后，可配合"需要邀请码"限制注册</p><p style="margin:5px 0">• 每个邀请码可设置使用次数，用完自动失效</p><p style="margin:5px 0">• 可设置邀请码关联的试用天数，注册用户自动获得对应时长</p></div></div><h3 style="margin-bottom:15px">生成邀请码</h3><div class="grid"><div><label>邀请码 <span style="color:#999;font-size:12px">(留空随机生成)</span></label><input type="text" id="inviteCode" placeholder="留空自动生成8位邀请码"></div><div><label>可使用次数</label><input type="number" id="inviteMaxUses" value="1" min="1" placeholder="默认1次"></div></div><div class="grid" style="margin-top:10px"><div><label>赠送试用天数 <span style="color:#999;font-size:12px">(0表示不赠送)</span></label><input type="number" id="inviteTrialDays" value="0" min="0" placeholder="注册后赠送的天数"></div><div><label>备注</label><input type="text" id="inviteRemark" placeholder="可选，例如：给某渠道"></div></div><div style="margin-top:15px"><button onclick="createInviteCode()" class="btn-primary">生成邀请码</button></div></div><div class="card"><h3 style="margin-bottom:15px">邀请码列表</h3><div id="inviteCodesList">加载中...</div></div></div></div><div id="section-password" class="section"><div class="content-header"><h2>🔐 修改密码</h2></div><div class="content-body"><div class="card"><h3>修改管理员密码</h3><div style="margin-bottom:15px"><label>当前密码</label><input type="password" id="oldPassword" placeholder="请输入当前密码" autocomplete="current-password"></div><div style="margin-bottom:15px"><label>新密码</label><input type="password" id="newPassword" placeholder="至少6位" autocomplete="new-password"></div><div style="margin-bottom:15px"><label>确认新密码</label><input type="password" id="confirmPassword" placeholder="再次输入新密码" autocomplete="new-password"></div><div style="margin-top:20px"><button onclick="changePassword()" class="btn-primary" style="width:100%;padding:15px;font-size:16px">🔐 修改密码</button></div></div></div></div><div id="section-data" class="section"><div class="content-header"><h2>📦 数据管理</h2></div><div class="content-body"><div class="card"><h3>数据导出</h3><p style="margin-bottom:15px;color:#666">导出所有系统数据（用户、订单、套餐等）为JSON格式</p><button onclick="exportData()" class="btn-primary" style="width:100%;padding:15px;font-size:16px">📥 导出数据</button></div><div class="card"><h3>数据导入</h3><p style="margin-bottom:15px;color:#ff4d4f">⚠️ 警告：数据导入功能开发中，请谨慎使用</p><input type="file" id="importFile" accept=".json" style="margin-bottom:15px"><button onclick="importData()" class="btn-warning" style="width:100%;padding:15px;font-size:16px">📤 导入数据</button></div></div></div><div id="section-logs" class="section"><div class="content-header"><h2>🔔 系统日志</h2></div><div class="content-body"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><h3 style="margin:0">系统操作日志</h3><button onclick="clearLogs()" class="btn-danger">清空日志</button></div><div id="logsList" style="border:1px solid #eee;border-radius:4px;padding:10px;max-height:500px;overflow-y:auto;background:#fafafa">加载中...</div></div></div></div><div id="section-stats" class="section"><div class="content-header"><h2>📊 数据统计</h2></div><div class="content-body"><div class="card"><h3>系统概览</h3><div id="statsOverview" class="grid">加载中...</div></div><div class="card"><h3>用户增长趋势（最近7天）</h3><div id="userTrend" style="padding:20px">加载中...</div></div><div class="card"><h3>订单统计（最近7天）</h3><div id="orderTrend" style="padding:20px">加载中...</div></div></div></div></div><div class="modal-overlay" id="editModal"><div class="modal"><h3>编辑用户</h3><input type="hidden" id="editUUID"><div style="margin-bottom:15px"><label>名称</label><input type="text" id="editName"></div><div style="margin-bottom:15px"><label>到期日期</label><input type="date" id="editExpiry"></div><div style="margin-bottom:15px"><label>前端用户名</label><input type="text" id="editFrontUsername" placeholder="修改前端登录用户名"></div><div style="margin-bottom:15px"><label>前端密码</label><input type="password" id="editFrontPassword" placeholder="留空则不修改密码"></div><div style="display:flex;gap:10px"><button onclick="saveEdit()" class="btn-primary">保存</button><button onclick="closeEdit()" style="background:#999">取消</button></div></div></div><div class="modal-overlay" id="editPlanModal"><div class="modal"><h3>编辑套餐</h3><input type="hidden" id="editPlanId"><div style="margin-bottom:15px"><label>套餐名称</label><input type="text" id="editPlanName"></div><div style="margin-bottom:15px"><label>时长(天)</label><input type="number" id="editPlanDuration" min="1"></div><div style="margin-bottom:15px"><label>套餐描述</label><textarea id="editPlanDescription" style="min-height:60px"></textarea></div><div style="margin-bottom:15px"><label>价格</label><input type="number" id="editPlanPrice" min="0" step="0.01"></div><div style="display:flex;gap:10px"><button onclick="savePlanEdit()" class="btn-primary">保存</button><button onclick="closePlanEdit()" style="background:#999">取消</button></div></div></div><div class="modal-overlay" id="editAnnouncementModal"><div class="modal" style="max-width:600px"><h3 id="announcementModalTitle">添加公告</h3><input type="hidden" id="editAnnouncementId"><div style="margin-bottom:15px"><label>公告标题</label><input type="text" id="editAnnouncementTitle" placeholder="例如：系统维护通知"></div><div style="margin-bottom:15px"><label>公告内容</label><textarea id="editAnnouncementContent" placeholder="支持换行，最多500字" style="min-height:120px" maxlength="500"></textarea></div><div style="margin-bottom:15px"><label style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="editAnnouncementEnabled" checked style="width:auto"><span>启用此公告</span></label></div><div style="text-align:right"><button onclick="closeAnnouncementEdit()" style="background:#999;margin-right:10px">取消</button><button onclick="saveAnnouncementEdit()" class="btn-primary">保存</button></div></div></div><div class="modal-overlay" id="editInviteCodeModal"><div class="modal"><h3>编辑邀请码</h3><input type="hidden" id="editInviteId"><div style="margin-bottom:15px"><label>邀请码</label><input type="text" id="editInviteCode" placeholder="邀请码"></div><div style="margin-bottom:15px"><label>最大使用次数</label><input type="number" id="editInviteMaxUses" min="1"></div><div style="margin-bottom:15px"><label>已使用次数</label><input type="number" id="editInviteUsedCount" disabled style="background:#f5f5f5"></div><div style="margin-bottom:15px"><label>赠送天数</label><input type="number" id="editInviteTrialDays" min="0"></div><div style="margin-bottom:15px"><label>备注</label><input type="text" id="editInviteRemark"></div><div style="display:flex;gap:10px"><button onclick="saveInviteEdit()" class="btn-primary">保存</button><button onclick="closeInviteEdit()" style="background:#999">取消</button></div></div></div><div class="modal-overlay" id="editPaymentChannelModal"><div class="modal"><h3>编辑支付通道</h3><input type="hidden" id="editPayChannelId"><div style="margin-bottom:15px"><label>通道名称</label><input type="text" id="editPayChannelName" placeholder="例如：USDT-TRC20"></div><div style="margin-bottom:15px"><label>通道代码</label><input type="text" id="editPayChannelCode" placeholder="例如：usdt.trc20"></div><div style="margin-bottom:15px"><label>API 地址</label><input type="text" id="editPayChannelApiUrl" placeholder="BEpusdt 服务地址"></div><div style="margin-bottom:15px"><label>API Token</label><input type="text" id="editPayChannelApiToken" placeholder="BEpusdt API 认证令牌"></div><div style="display:flex;gap:10px"><button onclick="savePaymentChannelEdit()" class="btn-primary">保存</button><button onclick="closePaymentChannelEdit()" style="background:#999">取消</button></div></div></div><div id="toast"></div><script>
-function toggleSwitch(event, checkboxId){
-  event.preventDefault();
-  event.stopPropagation();
-  const checkbox = document.getElementById(checkboxId);
-  if(!checkbox)return;
-  checkbox.checked = !checkbox.checked;
-  const slider = checkbox.parentElement.querySelector('.slider');
-  if(slider) slider.style.background = checkbox.checked ? '#52c41a' : '#d9d9d9';
-  if(checkboxId === 'enableTrialCheck'){
-    const div = document.getElementById('trialDaysDiv');
-    if(div) div.style = checkbox.checked ? 'margin-top:12px' : 'margin-top:12px;opacity:0.5;pointer-events:none;';
-  }
-  if(checkboxId === 'enableAutoCleanupCheck'){
-    const div = document.getElementById('autoCleanupDiv');
-    if(div) div.style = checkbox.checked ? 'margin-top:12px' : 'margin-top:12px;opacity:0.5;pointer-events:none;';
-  }
-  updateSystemSettings();
-}
-
-function escapeHtml(str){
-  if(!str)return'';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-
-
-async function loadSettings(){
-  try{
-    const res = await fetch('/api/admin/getSystemSettings');
-    const data = await res.json();
-    if(data.success){
-      settings = data.settings;
-      // 更新表单元素
-      if(document.getElementById('subUrl')) document.getElementById('subUrl').value = settings.subUrl || '';
-      if(document.getElementById('websiteUrl')) document.getElementById('websiteUrl').value = settings.websiteUrl || '';
-      if(document.getElementById('baseUrl')) document.getElementById('baseUrl').value = settings.baseUrl || '';
-      // 不再写入 textarea，只同步数组
-      // 同步 proxyIPsData 数组
-      if(typeof proxyIPsData !== 'undefined') proxyIPsData = settings.proxyIPs || [];
-      // 同步 bestDomainsData 数组
-      if(typeof bestDomainsData !== 'undefined') bestDomainsData = settings.bestDomains || [];
-      // 渲染列表
-      if(typeof renderProxyIPList === 'function') renderProxyIPList();
-      if(typeof renderBestDomainList === 'function') renderBestDomainList();
-    }
-  }catch(e){console.error(e)}
-}
-
-function showToast(msg,type){
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.style.background=type==='error'?'#ff4d4f':type==='success'?'#52c41a':'rgba(0,0,0,0.8)';
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3000);
-}
-
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}function copy(text){navigator.clipboard.writeText(text).then(()=>toast('已复制: '+text.substring(0,20)+'...'))}function copySubOriginal(uuid){const subUrl=document.getElementById('subUrl').value||window.location.origin;const url=subUrl.includes('://')?subUrl+'/'+uuid:'https://'+subUrl+'/'+uuid;copy(url)}
-
-// 订阅转换服务
-const apiBaseUrl='https://url.v1.mk/sub';
-
-function toggleDropdown(event,uuid){
-  event.stopPropagation();
-  const allDropdowns=document.querySelectorAll('.dropdown-content');
-  allDropdowns.forEach(d=>{if(d.id!=='dropdown-'+uuid)d.classList.remove('show')});
-  const dropdown=document.getElementById('dropdown-'+uuid);
-  dropdown.classList.toggle('show');
-}
-
-document.addEventListener('click',function(e){
-  if(!e.target.matches('.btn-copy')){
-    document.querySelectorAll('.dropdown-content').forEach(d=>d.classList.remove('show'));
-  }
-});
-
-function copySubByType(uuid,type){
-  const subUrlInput=document.getElementById('subUrl');
-  const subUrl=subUrlInput?subUrlInput.value:'';
-  const baseUrl=subUrl.includes('://')?subUrl:'https://'+(subUrl||window.location.host);
-  const originalUrl=baseUrl+'/'+uuid;
-  
-  let finalUrl=originalUrl;
-  if(type!=='original'){
-    const targetMap={
-      'clash':'clash','singbox':'singbox','surge':'surge',
-      'shadowrocket':'shadowrocket','quanx':'quanx','v2ray':'v2ray','surfboard':'surfboard'
-    };
-    const target=targetMap[type]||type;
-    finalUrl=apiBaseUrl+'?target='+target+'&url='+encodeURIComponent(originalUrl);
-  }
-  
-  navigator.clipboard.writeText(finalUrl).then(()=>{
-    const typeNames={
-      'original':'原始订阅','clash':'Clash','singbox':'SingBox','surge':'Surge',
-      'shadowrocket':'Shadowrocket','quanx':'Quantumult X','v2ray':'V2Ray','surfboard':'Surfboard'
-    };
-    toast('✅ 已复制 '+(typeNames[type]||type)+' 订阅');
-  });
-  document.querySelectorAll('.dropdown-content').forEach(d=>d.classList.remove('show'));
-}
-
-function switchSection(section){
-  document.querySelectorAll('.menu-item').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  document.querySelector('[data-section="'+section+'"]').classList.add('active');
-  document.getElementById('section-'+section).classList.add('active');
-  // 保存当前菜单状态
-  localStorage.setItem('adminCurrentSection', section);
-  if(section==='plans')loadPlans();
-  if(section==='orders')loadOrders();
-  if(section==='announcements')loadAnnouncements();
-  if(section==='payment')loadPaymentChannels();
-  if(section==='invites')loadInviteCodes();
-  if(section==='proxy-ips')loadSettings();
-  if(section==='best-domains')loadBestDomains();
-  if(section==='logs')loadLogs();
-  if(section==='stats')loadStats();
-  if(section==='dashboard')loadDashboard();
-}
-
-// 页面初始化
-(function initPage(){
-  const savedSection = localStorage.getItem('adminCurrentSection') || 'dashboard';
-  // 延迟执行以确保DOM已加载
-  setTimeout(()=>{
-    switchSection(savedSection);
-  }, 100);
-  // 启动优选IP更新倒计时
-  startBestIPCountdown();
-})();
-
-// 计算下次cron执行时间的倒计时
-function startBestIPCountdown(){
-  function updateCountdown(){
-    const now = new Date();
-    const currentMinutes = now.getMinutes();
-    const currentSeconds = now.getSeconds();
-    
-    // 计算距离下一个15分钟整点的剩余时间
-    const nextInterval = Math.ceil(currentMinutes / 15) * 15;
-    let minutesLeft = nextInterval - currentMinutes;
-    let secondsLeft = 60 - currentSeconds;
-    
-    if(secondsLeft === 60){
-      secondsLeft = 0;
-    } else {
-      minutesLeft--;
-    }
-    
-    // 如果是整点，显示下一个周期
-    if(minutesLeft < 0){
-      minutesLeft = 14;
-      secondsLeft = 60 - currentSeconds;
-    }
-    
-    const countdownEl = document.getElementById('nextUpdateCountdown');
-    if(countdownEl){
-      if(minutesLeft === 0 && secondsLeft < 10){
-        countdownEl.textContent = '即将更新...';
-        countdownEl.style.color = '#52c41a';
-      } else {
-        countdownEl.textContent = minutesLeft + '分' + secondsLeft + '秒后';
-        countdownEl.style.color = '#ff4d4f';
-      }
-    }
-  }
-  
-  // 立即执行一次
-  updateCountdown();
-  // 每秒更新
-  setInterval(updateCountdown, 1000);
-}
-
-async function loadDashboard(){try{const res1=await fetch('/api/admin/proxy-ips');const data1=await res1.json();const res2=await fetch('/api/admin/best-domains');const data2=await res2.json();const proxyCount=(data1.proxyIPs||[]).length;const domainCount=(data2.bestDomains||[]).length;const totalNodes=proxyCount+domainCount;const dashConfigEl=document.getElementById('dashConfigNodes');if(dashConfigEl)dashConfigEl.textContent=totalNodes;const settingsRes=await fetch('/api/admin/getSystemSettings');const settingsData=await settingsRes.json();if(settingsData.success){const s=settingsData.settings;const el1=document.getElementById('siteName');if(el1)el1.value=s.siteName||'CFly';const el2=document.getElementById('enableRegisterCheck');if(el2){el2.checked=s.enableRegister!==false;const slider=el2.parentElement.querySelector('.slider');if(slider)slider.style.background=el2.checked?'#52c41a':'#d9d9d9';}const el3=document.getElementById('autoApproveOrderCheck');if(el3){el3.checked=s.autoApproveOrder===true;const slider=el3.parentElement.querySelector('.slider');if(slider)slider.style.background=el3.checked?'#52c41a':'#d9d9d9';}const el4=document.getElementById('enableTrialCheck');if(el4){el4.checked=s.enableTrial===true;const slider=el4.parentElement.querySelector('.slider');if(slider)slider.style.background=el4.checked?'#52c41a':'#d9d9d9';}const el5=document.getElementById('trialDays');if(el5)el5.value=s.trialDays||7;const el6=document.getElementById('requireInviteCodeCheck');if(el6){el6.checked=s.requireInviteCode===true;const slider=el6.parentElement.querySelector('.slider');if(slider)slider.style.background=el6.checked?'#52c41a':'#d9d9d9';}const el7=document.getElementById('enableAutoCleanupCheck');if(el7){el7.checked=s.enableAutoCleanup===true;const slider=el7.parentElement.querySelector('.slider');if(slider)slider.style.background=el7.checked?'#52c41a':'#d9d9d9';}const el8=document.getElementById('autoCleanupDays');if(el8)el8.value=s.autoCleanupDays||7;const el9=document.getElementById('pendingOrderExpiry');if(el9)el9.value=s.pendingOrderExpiry||0;const el10=document.getElementById('paymentOrderExpiry');if(el10)el10.value=s.paymentOrderExpiry||15;const el11=document.getElementById('customLink1Name');if(el11)el11.value=s.customLink1Name||'';const el12=document.getElementById('customLink1Url');if(el12)el12.value=s.customLink1Url||'';const el13=document.getElementById('customLink2Name');if(el13)el13.value=s.customLink2Name||'';const el14=document.getElementById('customLink2Url');if(el14)el14.value=s.customLink2Url||'';const el15=document.getElementById('baseUrl');if(el15)el15.value=s.baseUrl||'';}}catch(e){console.error(e)}}
-async function updateSystemSettings(){
-  try{
-    const data={
-      siteName:(document.getElementById('siteName')||{}).value||'CFly',
-      enableRegister:(document.getElementById('enableRegisterCheck')||{}).checked?'true':'false',
-      autoApproveOrder:(document.getElementById('autoApproveOrderCheck')||{}).checked?'true':'false',
-      enableTrial:(document.getElementById('enableTrialCheck')||{}).checked?'true':'false',
-      trialDays:(document.getElementById('trialDays')||{}).value||'7',
-      requireInviteCode:(document.getElementById('requireInviteCodeCheck')||{}).checked?'true':'false',
-      pendingOrderExpiry:(document.getElementById('pendingOrderExpiry')||{}).value||'0',
-      paymentOrderExpiry:(document.getElementById('paymentOrderExpiry')||{}).value||'15',
-      customLink1Name:(document.getElementById('customLink1Name')||{}).value||'',
-      customLink1Url:(document.getElementById('customLink1Url')||{}).value||'',
-      customLink2Name:(document.getElementById('customLink2Name')||{}).value||'',
-      customLink2Url:(document.getElementById('customLink2Url')||{}).value||'',
-      enableAutoCleanup:(document.getElementById('enableAutoCleanupCheck')||{}).checked?'true':'false',
-      autoCleanupDays:(document.getElementById('autoCleanupDays')||{}).value||'7',
-      baseUrl:(document.getElementById('baseUrl')||{}).value||''
-    };
-    const res=await fetch('/api/admin/updateSystemSettings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-    if(res.ok){showToast('✅ 设置已自动保存','success');}
-    else{showToast('保存失败','error');}
-  }catch(e){console.error(e);showToast('保存失败','error');}
-}
-
-async function saveSystemSettings(){try{const data={siteName:document.getElementById('siteName').value,enableRegister:document.getElementById('enableRegister').checked?'true':'false',autoApproveOrder:document.getElementById('autoApproveOrder').checked?'true':'false',enableTrial:document.getElementById('enableTrial').checked?'true':'false',trialDays:document.getElementById('trialDays').value,requireInviteCode:document.getElementById('requireInviteCode').checked?'true':'false',pendingOrderExpiry:document.getElementById('pendingOrderExpiry').value,paymentOrderExpiry:document.getElementById('paymentOrderExpiry').value,customLink1Name:document.getElementById('customLink1Name').value,customLink1Url:document.getElementById('customLink1Url').value,customLink2Name:document.getElementById('customLink2Name').value,customLink2Url:document.getElementById('customLink2Url').value,enableAutoCleanup:document.getElementById('enableAutoCleanup').checked?'true':'false',autoCleanupDays:document.getElementById('autoCleanupDays').value};const res=await fetch('/api/admin/updateSystemSettings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('系统设置保存成功');loadDashboard()}else{alert('保存失败')}}catch(e){console.error(e);alert('保存失败')}}function toggleCheckAll(){const checked=document.getElementById('checkAll').checked;document.querySelectorAll('.u-check').forEach(c=>c.checked=checked);updateBatchBar()}function updateBatchBar(){const count=document.querySelectorAll('.u-check:checked').length;document.getElementById('selCount').textContent=count;const bar=document.getElementById('batchBar');bar.classList.toggle('show',count>0)}document.addEventListener('change',e=>{if(e.target.classList.contains('u-check'))updateBatchBar()});function getSelectedUUIDs(){return Array.from(document.querySelectorAll('.u-check:checked')).map(c=>c.value)}async function addUser(){const formData={name:document.getElementById('addName').value,expiryDate:document.getElementById('addExpiry').value,frontUsername:document.getElementById('addFrontUsername').value,frontPassword:document.getElementById('addFrontPassword').value,uuids:document.getElementById('addUUIDs').value};const res=await fetch('/api/admin/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(formData)});if(res.ok){toast('添加成功');location.reload()}else toast('添加失败')}function openEdit(uuid,name,expiry){document.getElementById('editUUID').value=uuid;document.getElementById('editName').value=name;document.getElementById('editExpiry').value=expiry;document.getElementById('editFrontUsername').value='';document.getElementById('editFrontPassword').value='';fetch('/api/admin/user/'+uuid).then(r=>r.json()).then(data=>{if(data.frontAccount){document.getElementById('editFrontUsername').value=data.frontAccount.username||''}}).catch(e=>console.error(e));document.getElementById('editModal').style.display='flex'}async function resetUUID(uuid){if(!confirm('确定要重置此用户的UUID吗？重置后原订阅链接将失效，用户需要重新获取订阅链接！'))return;try{const res=await fetch('/api/admin/reset-uuid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uuid})});const data=await res.json();if(res.ok&&data.success){toast('UUID已重置为: '+data.newUUID);location.reload()}else{alert('重置失败: '+(data.error||'未知错误'))}}catch(e){alert('重置失败: '+e.message)}}function closeEdit(){document.getElementById('editModal').style.display='none'}async function saveEdit(){const data={uuid:document.getElementById('editUUID').value,name:document.getElementById('editName').value,expiryDate:document.getElementById('editExpiry').value,frontUsername:document.getElementById('editFrontUsername').value,frontPassword:document.getElementById('editFrontPassword').value};const res=await fetch('/api/admin/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('保存成功');location.reload()}else toast('保存失败')}async function toggleStatus(uuid,enabled){await fetch('/api/admin/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uuids:uuid,enabled:enabled.toString()})});location.reload()}async function delUser(uuid){if(!confirm('确定删除此用户？'))return;await fetch('/api/admin/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uuids:uuid})});location.reload()}async function batchEnable(){const uuids=getSelectedUUIDs();if(uuids.length===0)return toast('请选择用户');await fetch('/api/admin/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uuids:uuids.join(','),enabled:'true'})});location.reload()}async function batchDisable(){const uuids=getSelectedUUIDs();if(uuids.length===0)return toast('请选择用户');await fetch('/api/admin/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uuids:uuids.join(','),enabled:'false'})});location.reload()}async function batchDelete(){const uuids=getSelectedUUIDs();if(uuids.length===0)return toast('请选择用户');if(!confirm('确定删除选中的 '+uuids.length+' 个用户？'))return;await fetch('/api/admin/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uuids:uuids.join(',')})});location.reload()}async function loadPlans(){try{const res=await fetch('/api/admin/plans');const data=await res.json();const container=document.getElementById('plansList');if(!data.success||!data.plans||data.plans.length===0){container.innerHTML='<p style="text-align:center;color:#999">暂无套餐</p>';return}let html='<table><thead><tr><th>名称</th><th>时长</th><th>价格</th><th>描述</th><th>状态</th><th>操作</th></tr></thead><tbody>';data.plans.forEach(p=>{const statusBadge=p.enabled?'<span class="tag active">上架</span>':'<span class="tag disabled">下架</span>';const toggleBtn=p.enabled?'<button onclick="togglePlan('+p.id+',false)" class="btn-action btn-warning">下架</button>':'<button onclick="togglePlan('+p.id+',true)" class="btn-action btn-success">上架</button>';const safeName=escapeHtml(p.name).replace(/'/g,"\\\\'").replace(/\\n/g,' ');const safeDesc=escapeHtml(p.description||'').replace(/'/g,"\\\\'").replace(/\\n/g,' ').replace(/\\r/g,'');const descPreview=(p.description||'-').replace(/<[^>]*>/g,'').substring(0,30);html+='<tr>';html+='<td>'+escapeHtml(p.name)+'</td>';html+='<td>'+p.duration_days+'天</td>';html+='<td>¥'+(p.price||0)+'</td>';html+='<td>'+escapeHtml(descPreview)+(descPreview.length>=30?'...':'')+'</td>';html+='<td>'+statusBadge+'</td>';html+='<td>'+toggleBtn+' <button onclick="openPlanEditById('+p.id+')" class="btn-action btn-edit">编辑</button> <button onclick="deletePlan('+p.id+')" class="btn-action btn-del">删除</button></td>';html+='</tr>'});html+='</tbody></table>';container.innerHTML=html}catch(e){console.error(e);document.getElementById('plansList').innerHTML='<p style="color:red">加载失败</p>'}}async function addPlan(){const name=document.getElementById('planName').value.trim();const duration=document.getElementById('planDuration').value;const description=document.getElementById('planDescription').value.trim();const price=document.getElementById('planPrice').value||0;if(!name||!duration)return alert('请填写套餐名称和时长');const data={name,duration_days:duration,description,price};const res=await fetch('/api/admin/plans/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('套餐创建成功');document.getElementById('planName').value='';document.getElementById('planDuration').value='';document.getElementById('planDescription').value='';document.getElementById('planPrice').value='';loadPlans()}else alert('创建失败')}async function togglePlan(id,enabled){const data={id,enabled:enabled?'true':'false'};const res=await fetch('/api/admin/plans/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('操作成功');loadPlans()}else alert('操作失败')}async function deletePlan(id){if(!confirm('确定删除此套餐？'))return;const res=await fetch('/api/admin/plans/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});if(res.ok){toast('删除成功');loadPlans()}else alert('删除失败')}
-
-let currentPlanData={};
-
-async function openPlanEditById(id){
-  try{
-    const res=await fetch('/api/admin/plans');
-    const data=await res.json();
-    if(data.success&&data.plans){
-      const plan=data.plans.find(p=>p.id===id);
-      if(plan){
-        currentPlanData=plan;
-        document.getElementById('editPlanId').value=plan.id;
-        document.getElementById('editPlanName').value=plan.name||'';
-        document.getElementById('editPlanDuration').value=plan.duration_days||30;
-        document.getElementById('editPlanDescription').value=plan.description||'';
-        document.getElementById('editPlanPrice').value=plan.price||0;
-        document.getElementById('editPlanModal').style.display='flex';
-      }
-    }
-  }catch(e){console.error(e);alert('获取套餐信息失败')}
-}
-
-function openPlanEdit(id,name,duration,description,price){document.getElementById('editPlanId').value=id;document.getElementById('editPlanName').value=name;document.getElementById('editPlanDuration').value=duration;document.getElementById('editPlanDescription').value=description;document.getElementById('editPlanPrice').value=price;document.getElementById('editPlanModal').style.display='flex'}function closePlanEdit(){document.getElementById('editPlanModal').style.display='none'}async function savePlanEdit(){const id=document.getElementById('editPlanId').value;const name=document.getElementById('editPlanName').value.trim();const duration=document.getElementById('editPlanDuration').value;const description=document.getElementById('editPlanDescription').value.trim();const price=document.getElementById('editPlanPrice').value||0;if(!name||!duration)return alert('请填写套餐名称和时长');const data={id,name,duration_days:duration,description,price};const res=await fetch('/api/admin/plans/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('更新成功');closePlanEdit();loadPlans()}else alert('更新失败')}async function loadOrders(){try{const res=await fetch('/api/admin/orders');const data=await res.json();const container=document.getElementById('ordersList');const filterSelect=document.getElementById('orderStatusFilter');const statusFilter=filterSelect?filterSelect.value:'pending';let filteredOrders=data.orders||[];if(statusFilter!=='all'){filteredOrders=filteredOrders.filter(o=>o.status===statusFilter)}document.getElementById('orderBatchBar').style.display='none';if(filteredOrders.length===0){container.innerHTML='<p style="text-align:center;color:#999">暂无订单</p>';return}const hasPending=statusFilter==='pending'||(statusFilter==='all'&&filteredOrders.some(o=>o.status==='pending'));let html='<table><thead><tr>';if(hasPending)html+='<th width="40"><input type="checkbox" id="orderSelectAll" onclick="toggleOrderSelectAll()"></th>';html+='<th>ID</th><th>用户</th><th>套餐</th><th>金额</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>';filteredOrders.forEach(o=>{let statusBadge='',actions='',checkbox='';if(o.status==='pending'){statusBadge='<span class="tag" style="background:#faad14;color:white">待审核</span>';checkbox='<input type="checkbox" class="order-checkbox" value="'+o.id+'" onchange="updateOrderSelection()">';actions='<button onclick="approveOrder('+o.id+')" class="btn-action btn-success">通过</button> <button onclick="rejectOrder('+o.id+')" class="btn-action btn-del">拒绝</button>'}else if(o.status==='approved'){statusBadge='<span class="tag active">已通过</span>';actions='-'}else if(o.status==='rejected'){statusBadge='<span class="tag expired">已拒绝</span>';actions='-'}html+='<tr>';if(hasPending)html+='<td>'+checkbox+'</td>';html+='<td>#'+o.id+'</td>';html+='<td>'+(o.username||'-')+'</td>';html+='<td>'+(o.plan_name||'-')+' ('+o.duration_days+'天)</td>';html+='<td>¥'+(o.amount||0)+'</td>';html+='<td>'+(o.created_at?new Date(o.created_at).toLocaleString('zh-CN'):'')+'</td>';html+='<td>'+statusBadge+'</td>';html+='<td>'+actions+'</td>';html+='</tr>'});html+='</tbody></table>';container.innerHTML=html}catch(e){console.error(e);document.getElementById('ordersList').innerHTML='<p style="color:red">加载失败</p>'}}function toggleOrderSelectAll(){const selectAll=document.getElementById('orderSelectAll');const checkboxes=document.querySelectorAll('.order-checkbox');checkboxes.forEach(cb=>cb.checked=selectAll.checked);updateOrderSelection()}function updateOrderSelection(){const checkboxes=document.querySelectorAll('.order-checkbox:checked');const count=checkboxes.length;document.getElementById('orderSelCount').textContent=count;document.getElementById('orderBatchBar').style.display=count>0?'flex':'none'}async function batchOrderAction(action){const checkboxes=document.querySelectorAll('.order-checkbox:checked');if(checkboxes.length===0)return toast('请先选择订单');const actionText=action==='approve'?'通过':'拒绝';if(!confirm('确定要批量'+actionText+' '+checkboxes.length+' 个订单吗？'))return;const orderIds=Array.from(checkboxes).map(cb=>cb.value);for(const orderId of orderIds){try{const endpoint=action==='approve'?'/api/admin/orders/approve':'/api/admin/orders/reject';await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:orderId})})}catch(e){}}toast('批量操作完成');loadOrders()}async function approveOrder(orderId){if(!confirm('确定通过此订单？'))return;const res=await fetch('/api/admin/orders/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:orderId})});if(res.ok){toast('订单已通过');loadOrders()}else alert('操作失败')}async function rejectOrder(orderId){if(!confirm('确定拒绝此订单？'))return;const res=await fetch('/api/admin/orders/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:orderId})});if(res.ok){toast('订单已拒绝');loadOrders()}else alert('操作失败')}async function saveSettings(){const data={subUrl:document.getElementById('subUrl').value};const res=await fetch('/api/admin/updateSystemSettings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok)toast('配置已保存');else toast('保存失败')}async function loadAnnouncements(){try{const res=await fetch('/api/admin/announcements');const data=await res.json();const container=document.getElementById('announcementsList');if(!data.success||!data.announcements||data.announcements.length===0){container.innerHTML='<p style="text-align:center;color:#999;padding:20px">暂无公告</p>';return}let html='<table><thead><tr><th>标题</th><th>内容</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>';data.announcements.forEach(a=>{const statusBadge=a.enabled?'<span class="tag active">启用</span>':'<span class="tag disabled">禁用</span>';const contentPreview=(a.content||'').length>50?(a.content.substring(0,50)+'...'):a.content;html+='<tr>';html+='<td>'+a.title+'</td>';html+='<td>'+contentPreview+'</td>';html+='<td>'+statusBadge+'</td>';html+='<td>'+(a.created_at?new Date(a.created_at).toLocaleString('zh-CN'):'')+'</td>';html+='<td><button onclick="editAnnouncement('+a.id+')" class="btn-action btn-edit">编辑</button> <button onclick="deleteAnnouncement('+a.id+')" class="btn-action btn-del">删除</button></td>';html+='</tr>'});html+='</tbody></table>';container.innerHTML=html}catch(e){console.error(e);document.getElementById('announcementsList').innerHTML='<p style="color:red">加载失败</p>'}}function openAddAnnouncement(){document.getElementById('editAnnouncementId').value='';document.getElementById('editAnnouncementTitle').value='';document.getElementById('editAnnouncementContent').value='';document.getElementById('editAnnouncementEnabled').checked=true;document.getElementById('announcementModalTitle').textContent='添加公告';document.getElementById('editAnnouncementModal').style.display='flex'}async function editAnnouncement(id){try{const res=await fetch('/api/admin/announcements/'+id);const data=await res.json();if(data.success){document.getElementById('editAnnouncementId').value=data.announcement.id;document.getElementById('editAnnouncementTitle').value=data.announcement.title;document.getElementById('editAnnouncementContent').value=data.announcement.content||'';document.getElementById('editAnnouncementEnabled').checked=data.announcement.enabled;document.getElementById('announcementModalTitle').textContent='编辑公告';document.getElementById('editAnnouncementModal').style.display='flex'}}catch(e){alert('获取公告信息失败')}}function closeAnnouncementEdit(){document.getElementById('editAnnouncementModal').style.display='none'}async function saveAnnouncementEdit(){const id=document.getElementById('editAnnouncementId').value;const title=document.getElementById('editAnnouncementTitle').value.trim();const content=document.getElementById('editAnnouncementContent').value.trim();const enabled=document.getElementById('editAnnouncementEnabled').checked;if(!title||!content)return alert('请填写标题和内容');const data={title,content,enabled:enabled?1:0};const endpoint=id?'/api/admin/announcements/update':'/api/admin/announcements/create';const body=id?{id,...data}:data;const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){toast(id?'更新成功':'创建成功');closeAnnouncementEdit();loadAnnouncements()}else alert('操作失败')}async function deleteAnnouncement(id){if(!confirm('确定删除此公告？'))return;const res=await fetch('/api/admin/announcements/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});if(res.ok){toast('删除成功');loadAnnouncements()}else alert('删除失败')}async function loadPaymentChannels(){try{const res=await fetch('/api/admin/payment/channels');const data=await res.json();const container=document.getElementById('paymentChannelsList');if(!data.success||!data.channels||data.channels.length===0){container.innerHTML='<p style="text-align:center;color:#999;padding:20px">暂无支付通道，请添加</p>';return}let html='<table style="width:100%"><thead><tr><th>ID</th><th>名称</th><th>代码</th><th>API 地址</th><th>状态</th><th>操作</th></tr></thead><tbody>';data.channels.forEach(c=>{const statusBadge=c.enabled?'<span class="badge" style="background:#52c41a;color:white;padding:4px 8px;border-radius:4px">启用</span>':'<span class="badge" style="background:#999;color:white;padding:4px 8px;border-radius:4px">禁用</span>';const toggleBtn=c.enabled?'<button onclick="togglePaymentChannel('+c.id+',false)" class="btn-action" style="background:#ff9500">禁用</button>':'<button onclick="togglePaymentChannel('+c.id+',true)" class="btn-action btn-success">启用</button>';html+='<tr>';html+='<td>'+c.id+'</td>';html+='<td>'+(c.name||'')+'</td>';html+='<td><code>'+(c.code||'')+'</code></td>';html+='<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">'+(c.api_url||'')+'</td>';html+='<td>'+statusBadge+'</td>';html+='<td>'+toggleBtn+' <button onclick="editPaymentChannel('+c.id+')" class="btn-action btn-edit">编辑</button> <button onclick="deletePaymentChannel('+c.id+')" class="btn-action btn-del">删除</button></td>';html+='</tr>'});html+='</tbody></table>';container.innerHTML=html}catch(e){console.error(e);document.getElementById('paymentChannelsList').innerHTML='<p style="color:red">加载失败</p>'}}async function addPaymentChannel(){const name=document.getElementById('paymentName').value.trim();const type=document.getElementById('paymentType').value;const config=document.getElementById('paymentConfig').value.trim();if(!name||!config)return alert('请填写渠道名称和配置');const data={name,type,config};const res=await fetch('/api/admin/payment-channels/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('添加成功');document.getElementById('paymentName').value='';document.getElementById('paymentConfig').value='';loadPaymentChannels()}else alert('添加失败')}async function togglePaymentChannel(id,enabled){const res=await fetch('/api/admin/payment/channels/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,enabled:enabled?'true':'false'})});if(res.ok){toast('操作成功');loadPaymentChannels()}else alert('操作失败')}async function deletePaymentChannel(id){if(!confirm('确定删除此支付渠道？'))return;const res=await fetch('/api/admin/payment/channels/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});if(res.ok){toast('删除成功');loadPaymentChannels()}else alert('删除失败')}async function editPaymentChannel(id){try{const res=await fetch('/api/admin/payment/channels');const data=await res.json();if(data.success){const channel=data.channels.find(c=>c.id===id);if(channel){document.getElementById('editPayChannelId').value=channel.id;document.getElementById('editPayChannelName').value=channel.name||'';document.getElementById('editPayChannelCode').value=channel.code||'';document.getElementById('editPayChannelApiUrl').value=channel.api_url||'';document.getElementById('editPayChannelApiToken').value=channel.api_token||'';document.getElementById('editPaymentChannelModal').style.display='flex'}}}catch(e){alert('获取支付通道信息失败')}}function closePaymentChannelEdit(){document.getElementById('editPaymentChannelModal').style.display='none'}async function savePaymentChannelEdit(){const id=document.getElementById('editPayChannelId').value;const name=document.getElementById('editPayChannelName').value.trim();const code=document.getElementById('editPayChannelCode').value.trim();const apiUrl=document.getElementById('editPayChannelApiUrl').value.trim();const apiToken=document.getElementById('editPayChannelApiToken').value.trim();if(!name||!code||!apiUrl)return alert('请填写通道名称、代码和API地址');const data={id,name,code,api_url:apiUrl,api_token:apiToken};const res=await fetch('/api/admin/payment/channels/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('更新成功');closePaymentChannelEdit();loadPaymentChannels()}else alert('更新失败')}async function savePaymentChannel(){const name=document.getElementById('payChannelName').value.trim();const code=document.getElementById('payChannelCode').value.trim();const apiUrl=document.getElementById('payChannelApiUrl').value.trim();const apiToken=document.getElementById('payChannelApiToken').value.trim();if(!name||!code||!apiUrl)return alert('请填写通道名称、代码和API地址');const data={name,code,api_url:apiUrl,api_token:apiToken};const res=await fetch('/api/admin/payment/channels/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('添加成功');document.getElementById('payChannelName').value='';document.getElementById('payChannelCode').value='';document.getElementById('payChannelApiUrl').value='';document.getElementById('payChannelApiToken').value='';loadPaymentChannels()}else alert('添加失败')}async function loadInviteCodes(){try{const res=await fetch('/api/admin/invites');const data=await res.json();const container=document.getElementById('inviteCodesList');if(!data.success||!data.invites||data.invites.length===0){container.innerHTML='<p style="text-align:center;color:#999;padding:40px 0">暂无邀请码</p>';return}let html='<div style="overflow-x:auto"><table style="width:100%;min-width:700px"><thead><tr><th>邀请码</th><th>可用/总数</th><th>赠送天数</th><th>备注</th><th>创建时间</th><th>状态</th><th>操作</th></tr></thead><tbody>';data.invites.forEach(inv=>{const createdDate=inv.created_at?new Date(inv.created_at).toLocaleString('zh-CN'):'';const remaining=inv.max_uses-inv.used_count;const isActive=inv.enabled&&remaining>0;const statusColor=isActive?'#52c41a':'#d9d9d9';const statusText=!inv.enabled?'已禁用':(remaining<=0?'已用完':'可用');html+='<tr>';html+='<td style="font-family:monospace;font-weight:600;cursor:pointer" onclick="copy(\\''+inv.code+'\\')">'+inv.code+' 📋</td>';html+='<td>'+remaining+' / '+inv.max_uses+'</td>';html+='<td>'+(inv.trial_days>0?inv.trial_days+'天':'-')+'</td>';html+='<td style="color:#666">'+(inv.remark||'-')+'</td>';html+='<td style="color:#999;font-size:13px">'+createdDate+'</td>';html+='<td><span style="display:inline-block;padding:4px 12px;background:'+statusColor+';color:white;border-radius:12px;font-size:12px">'+statusText+'</span></td>';html+='<td>';if(inv.enabled){html+='<button onclick="toggleInviteCode('+inv.id+',false)" class="btn-action btn-secondary" style="margin-right:5px">禁用</button>'}else{html+='<button onclick="toggleInviteCode('+inv.id+',true)" class="btn-action btn-success" style="margin-right:5px">启用</button>'}html+='<button onclick="editInviteCode('+inv.id+',\\''+inv.code+'\\','+inv.max_uses+','+inv.trial_days+',\\''+(inv.remark||'')+'\\','+inv.used_count+')" class="btn-action btn-edit" style="margin-right:5px">编辑</button>';html+='<button onclick="deleteInviteCode('+inv.id+')" class="btn-action btn-del">删除</button>';html+='</td>';html+='</tr>'});html+='</tbody></table></div>';container.innerHTML=html}catch(e){console.error(e);document.getElementById('inviteCodesList').innerHTML='<p style="color:red">加载失败</p>'}}async function createInviteCode(){const code=document.getElementById('inviteCode').value.trim();const maxUses=document.getElementById('inviteMaxUses').value||1;const trialDays=document.getElementById('inviteTrialDays').value||0;const remark=document.getElementById('inviteRemark').value.trim();const data={max_uses:maxUses,trial_days:trialDays,remark};if(code)data.code=code;const res=await fetch('/api/admin/invites/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await res.json();if(res.ok&&result.success){toast('✅ 邀请码已生成: '+result.code);document.getElementById('inviteCode').value='';document.getElementById('inviteMaxUses').value='1';document.getElementById('inviteTrialDays').value='0';document.getElementById('inviteRemark').value='';loadInviteCodes()}else alert('生成失败: '+(result.error||'未知错误'))}async function toggleInviteCode(id,enabled){const res=await fetch('/api/admin/invites/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,enabled:enabled?'true':'false'})});if(res.ok){toast('操作成功');loadInviteCodes()}else alert('操作失败')}async function deleteInviteCode(id){if(!confirm('确定删除此邀请码？'))return;const res=await fetch('/api/admin/invites/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});if(res.ok){toast('删除成功');loadInviteCodes()}else alert('删除失败')}function editInviteCode(id,code,maxUses,trialDays,remark,usedCount){document.getElementById('editInviteId').value=id;document.getElementById('editInviteCode').value=code;document.getElementById('editInviteMaxUses').value=maxUses;document.getElementById('editInviteUsedCount').value=usedCount;document.getElementById('editInviteTrialDays').value=trialDays;document.getElementById('editInviteRemark').value=remark;document.getElementById('editInviteCodeModal').style.display='flex'}function closeInviteEdit(){document.getElementById('editInviteCodeModal').style.display='none'}async function saveInviteEdit(){const id=document.getElementById('editInviteId').value;const code=document.getElementById('editInviteCode').value.trim();const maxUses=document.getElementById('editInviteMaxUses').value;const trialDays=document.getElementById('editInviteTrialDays').value;const remark=document.getElementById('editInviteRemark').value.trim();if(!code||!maxUses)return alert('请填写邀请码和最大使用次数');const data={id,code,max_uses:maxUses,trial_days:trialDays,remark};const res=await fetch('/api/admin/invites/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){toast('更新成功');closeInviteEdit();loadInviteCodes()}else alert('更新失败')}let bestDomainsData=[];
-
-let proxyIPsData=[];
-
-// 加载并显示反代IP列表（从已保存的数据渲染，不从textarea读取）
-function loadAndRenderProxyIPs(){
-  // 如果 proxyIPsData 为空，不做任何操作（等待 loadSettings 填充数据）
-  renderProxyIPList();
-}
-
-// 添加反代IP到列表
-function addProxyIPs(){
-  const input=document.getElementById('proxyIPInput').value.trim();
-  if(!input)return;
-  const lines=input.split('\\n').map(l=>l.trim()).filter(l=>l);
-  let count=0;
-  lines.forEach(line=>{
-    let val=line;
-    if(!val.includes(':'))val+=':443';
-    if(!proxyIPsData.includes(val)){
-      proxyIPsData.push(val);
-      count++;
-    }
-  });
-  document.getElementById('proxyIPInput').value='';
-  renderProxyIPList();
-  if(count>0)toast('已添加 '+count+' 条');
-}
-
-// 清空反代IP列表
-function clearProxyIPs(){
-  if(!confirm('确定清空所有反代IP？'))return;
-  proxyIPsData=[];
-  renderProxyIPList();
-  toast('已清空');
-}
-
-function renderProxyIPList(){
-  const container=document.getElementById('proxyIPList');
-  if(proxyIPsData.length===0){
-    container.innerHTML='<div style="padding:20px;text-align:center;color:#999">暂无反代IP</div>';
-    return;
-  }
-  container.innerHTML='';
-  proxyIPsData.forEach((ip,idx)=>{
-    const div=document.createElement('div');
-    div.className='config-item';
-    div.draggable=true;
-    div.dataset.index=idx;
-    div.dataset.type='ProxyIP';
-    div.innerHTML='<span class="drag-handle">☰</span><span style="flex:1;font-family:monospace;font-size:13px">'+ip+'</span><span class="del-btn" onclick="delProxyIP('+idx+')">×</span>';
-    
-    div.addEventListener('dragstart',(e)=>{
-      e.dataTransfer.effectAllowed='move';
-      e.dataTransfer.setData('text/plain',idx);
-      div.classList.add('dragging');
-    });
-    
-    div.addEventListener('dragend',()=>{
-      div.classList.remove('dragging');
-    });
-    
-    div.addEventListener('dragover',(e)=>{
-      e.preventDefault();
-      const draggingEl=container.querySelector('.dragging');
-      if(!draggingEl||draggingEl===div)return;
-      const rect=div.getBoundingClientRect();
-      const offset=e.clientY-rect.top-rect.height/2;
-      if(offset>0){div.after(draggingEl);}else{div.before(draggingEl);}
-    });
-    
-    div.addEventListener('drop',(e)=>{
-      e.preventDefault();
-      const fromIndex=parseInt(e.dataTransfer.getData('text/plain'));
-      const items=container.querySelectorAll('.config-item');
-      const newOrder=[];
-      items.forEach(item=>newOrder.push(proxyIPsData[parseInt(item.dataset.index)]));
-      proxyIPsData=newOrder;
-      renderProxyIPList();
-      toast('✅ 顺序已调整');
-    });
-    
-    container.appendChild(div);
-  });
-}
-
-function delProxyIP(idx){
-  proxyIPsData.splice(idx,1);
-  renderProxyIPList();
-}
-
-// 页面加载时显示反代IP列表
-if(document.getElementById('proxyIPInput')){
-  loadAndRenderProxyIPs();
-}
-
-async function loadProxyIPs(){
-  // 反代IP现在直接从textarea加载，不需要额外操作
-}
-
-async function saveProxySettings(){
-  try{
-    // 使用 proxyIPsData 数组而不是从 textarea 读取
-    const proxyIPLines = proxyIPsData.map(line=>{
-      return line.includes(':') ? line : line+':443';
-    });
-    
-    const subUrl = document.getElementById('subUrl').value.trim();
-    const websiteUrl = document.getElementById('websiteUrl').value.trim();
-    
-    // 先获取当前设置
-    const settingsRes = await fetch('/api/admin/getSystemSettings');
-    const settingsData = await settingsRes.json();
-    const currentSettings = settingsData.settings || {};
-    
-    const data = {
-      proxyIP: proxyIPLines.join('\\n'),
-      bestDomains: (currentSettings.bestDomains && currentSettings.bestDomains.length > 0) ? currentSettings.bestDomains.join('\\n') : '', // 保持现有的bestDomains
-      subUrl: subUrl,
-      websiteUrl: websiteUrl
-    };
-    
-    const res = await fetch('/api/admin/saveSettings',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(data)
-    });
-    
-    if(res.ok){
-      toast('✅ 保存成功');
-    } else {
-      toast('❌ 保存失败');
-    }
-  } catch(e){
-    console.error(e);
-    toast('❌ 保存失败');
-  }
-}async function loadBestDomains(){try{const res=await fetch('/api/admin/best-domains');const data=await res.json();if(data.success){bestDomainsData=data.bestDomains||[];renderBestDomainList()}}catch(e){console.error(e);toast('加载失败')}}function renderBestDomainList(){const container=document.getElementById('bestDomainList');if(bestDomainsData.length===0){container.innerHTML='<div style="padding:20px;text-align:center;color:#999">暂无优选域名</div>';return}container.innerHTML='';bestDomainsData.forEach((domain,idx)=>{const div=document.createElement('div');div.className='config-item';div.draggable=true;div.dataset.index=idx;div.dataset.type='BestDomain';div.innerHTML='<span class="drag-handle">☰</span><span style="flex:1;font-family:monospace;font-size:13px">'+domain+'</span><span class="del-btn" onclick="removeBestDomain('+idx+')">×</span>';div.addEventListener('dragstart',(e)=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',idx);div.classList.add('dragging')});div.addEventListener('dragend',()=>{div.classList.remove('dragging')});div.addEventListener('dragover',(e)=>{e.preventDefault();const draggingEl=container.querySelector('.dragging');if(!draggingEl||draggingEl===div)return;const rect=div.getBoundingClientRect();const offset=e.clientY-rect.top-rect.height/2;if(offset>0){div.after(draggingEl)}else{div.before(draggingEl)}});div.addEventListener('drop',(e)=>{e.preventDefault();const items=container.querySelectorAll('.config-item');const newOrder=[];items.forEach(item=>newOrder.push(bestDomainsData[parseInt(item.dataset.index)]));bestDomainsData=newOrder;renderBestDomainList();toast('✅ 顺序已调整')});container.appendChild(div)})}function addBestDomains(){const input=document.getElementById('bestDomainInput').value.trim();if(!input)return;const lines=input.split('\\n').map(l=>l.trim()).filter(l=>l);bestDomainsData.push(...lines);document.getElementById('bestDomainInput').value='';renderBestDomainList();toast('已添加 '+lines.length+' 个域名')}function removeBestDomain(idx){bestDomainsData.splice(idx,1);renderBestDomainList()}function clearBestDomains(){if(!confirm('确定清空所有优选域名？'))return;bestDomainsData=[];renderBestDomainList();toast('已清空')}
-
-async function fetchBestIPs(type){
-  const btn=event.target;
-  const originalText=btn.innerText;
-  btn.innerText='获取中...';
-  btn.disabled=true;
-  try{
-    const res=await fetch('/api/admin/fetchBestIPs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:type})});
-    if(!res.ok){toast('❌ 获取失败');return}
-    const result=await res.json();
-    if(!result.success){toast('❌ '+(result.error||'获取失败'));return}
-    const ipVersion=type==='v6'?'IPv6':'IPv4';
-    const versionTag=type==='v6'?'v6':'v4';
-    await loadBestDomains();
-    const manualDomains=[];
-    const allAutoDomains={};
-    bestDomainsData.forEach(domain=>{
-      const autoMatch=domain.match(/^(\[?[0-9a-fA-F:.]+\]?):443#(v4|v6)(移动|联通|电信|铁通|广电)\s+[A-Z]{3}$/);
-      if(!autoMatch){
-        manualDomains.push(domain);
-      }else{
-        const[,ip,ver,line]=autoMatch;
-        const lineKey=line+'_'+ver;
-        if(!allAutoDomains[lineKey])allAutoDomains[lineKey]=[];
-        allAutoDomains[lineKey].push(domain);
-      }
-    });
-    const newDataByLine={};
-    result.data.forEach(item=>{
-      const lineKey=item.lineKey;
-      if(!newDataByLine[lineKey])newDataByLine[lineKey]=[];
-      if(newDataByLine[lineKey].length<5){
-        newDataByLine[lineKey].push(item.entry);
-      }
-    });
-    const newAutoDomains=[];
-    const allLineKeys=new Set([...Object.keys(newDataByLine),...Object.keys(allAutoDomains)]);
-    allLineKeys.forEach(lineKey=>{
-      const newIPs=newDataByLine[lineKey]||[];
-      const oldIPs=allAutoDomains[lineKey]||[];
-      if(newIPs.length>0){
-        const merged=[...newIPs.slice(0,5)];
-        if(merged.length<5){
-          for(const oldIP of oldIPs){
-            if(!merged.includes(oldIP)){
-              merged.push(oldIP);
-              if(merged.length>=5)break;
+function renderAdminPanel() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFly Panel - VLES 管理端</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#000000",
+            "background-light": "#ffffff",
+            "background-dark": "#09090b",
+            border: {
+              light: "#e4e4e7",
+              dark: "#27272a"
+            },
+            muted: {
+              light: "#71717a",
+              dark: "#a1a1aa"
             }
+          },
+          fontFamily: {
+            display: ["Inter", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+            'lg': "0.75rem",
+          },
+        },
+      },
+    };
+  </script>
+  <script>
+    // 全局函数预定义（在DOM加载前）
+    function switchSection(sectionName, skipSave) {
+      // 实际实现会在页面加载后覆盖
+      console.log('switchSection will be initialized after DOM load');
+    }
+    function closeModal() {
+      console.log('closeModal will be initialized after DOM load');
+    }
+    function closeCustomConfirm(result) {
+      console.log('closeCustomConfirm will be initialized after DOM load');
+    }
+    function showSubLinkModal(uuid) {
+      console.log('showSubLinkModal will be initialized after DOM load');
+    }
+    function closeSubLinkModal() {
+      console.log('closeSubLinkModal will be initialized after DOM load');
+    }
+    function copySubLinkAndClose(client) {
+      console.log('copySubLinkAndClose will be initialized after DOM load');
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .material-symbols-outlined { font-size: 20px; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #d1d1d1; border-radius: 10px; }
+    .dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+    .section-content { display: none; }
+    .section-content.active { display: block; }
+    /* Modal 动画 */
+    .modal-show { opacity: 1 !important; pointer-events: auto !important; }
+    .modal-show > div { transform: scale(1) !important; }
+    /* 标签激活状态 */
+    .tab-trigger {
+      transition: all 0.2s;
+    }
+    .tab-trigger.active {
+      background: white;
+      color: #0f172a;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .dark .tab-trigger.active {
+      background: #09090b;
+      color: #fafafa;
+    }
+  </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-950 dark:text-slate-50 transition-colors duration-200">
+  
+  <!-- 自定义Alert弹窗 -->
+  <div id="custom-alert-overlay" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white dark:bg-zinc-950 w-full max-w-md rounded-lg border border-slate-200 dark:border-zinc-800 shadow-xl transform scale-95 transition-all duration-200">
+      <div class="p-6">
+        <div class="flex items-start gap-4 mb-4">
+          <div id="alert-icon" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+            <span class="material-symbols-outlined text-2xl"></span>
+          </div>
+          <div class="flex-1">
+            <h3 id="alert-title" class="text-lg font-semibold mb-2"></h3>
+            <p id="alert-message" class="text-sm text-slate-600 dark:text-zinc-400 whitespace-pre-line"></p>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button onclick="closeCustomAlert()" class="px-4 py-2 bg-primary dark:bg-white text-white dark:text-black text-sm font-medium rounded-md hover:opacity-90 transition-opacity">
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 自定义Confirm弹窗 -->
+  <div id="custom-confirm-overlay" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white dark:bg-zinc-950 w-full max-w-md rounded-lg border border-slate-200 dark:border-zinc-800 shadow-xl transform scale-95 transition-all duration-200">
+      <div class="p-6">
+        <div class="flex items-start gap-4 mb-6">
+          <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+            <span class="material-symbols-outlined text-2xl text-amber-600 dark:text-amber-400">warning</span>
+          </div>
+          <div class="flex-1">
+            <h3 id="confirm-title" class="text-lg font-semibold mb-2"></h3>
+            <p id="confirm-message" class="text-sm text-slate-600 dark:text-zinc-400 whitespace-pre-line"></p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button onclick="closeCustomConfirm(false)" class="px-4 py-2 border border-slate-200 dark:border-zinc-800 text-sm font-medium rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
+            取消
+          </button>
+          <button onclick="closeCustomConfirm(true)" class="px-4 py-2 bg-primary dark:bg-white text-white dark:text-black text-sm font-medium rounded-md hover:opacity-90 transition-opacity">
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 订阅链接弹窗 -->
+  <div id="sub-link-modal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-lg border border-slate-200 dark:border-zinc-800 shadow-xl transform scale-95 transition-all duration-200">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-zinc-100">选择客户端类型</h3>
+          <button onclick="closeSubLinkModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-zinc-400 mb-4">请选择您的客户端类型，系统将自动复制对应的订阅链接</p>
+        <div class="grid grid-cols-3 gap-3" id="sub-link-buttons">
+          <!-- 动态生成按钮 -->
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 全局模态框 -->
+  <div id="modal-overlay" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300">
+    <div id="modal-content" class="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 w-full max-w-2xl mx-4 rounded-xl shadow-none overflow-hidden transform scale-95 transition-all duration-300">
+      <div class="px-6 py-6 pb-2">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 id="modal-title" class="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">标题</h3>
+            <p id="modal-subtitle" class="text-sm text-zinc-500 dark:text-zinc-400 mt-1"></p>
+          </div>
+          <button onclick="closeModal()" class="rounded-md p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors">
+            <span class="material-symbols-outlined text-zinc-500">close</span>
+          </button>
+        </div>
+      </div>
+      <div id="modal-body">
+        <!-- 动态内容 -->
+      </div>
+    </div>
+  </div>
+  
+  <div class="flex min-h-screen">
+    <!-- 侧边栏 -->
+    <aside class="w-64 border-r border-border-light dark:border-border-dark flex flex-col fixed inset-y-0 left-0 z-50 bg-background-light dark:bg-background-dark">
+      <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center gap-2">
+        <div class="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white">
+          <span class="material-symbols-outlined">terminal</span>
+        </div>
+        <span class="font-bold text-lg tracking-tight">CFly Panel</span>
+      </div>
+      
+      <nav class="flex-1 overflow-y-auto p-4 space-y-1">
+        <div class="text-[10px] font-semibold text-muted-light dark:text-muted-dark uppercase tracking-wider mb-2 px-2">Main</div>
+        
+        <a onclick="switchSection('dashboard')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">dashboard</span>
+          <span>仪表盘</span>
+        </a>
+        
+        <a onclick="switchSection('users')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">group</span>
+          <span>用户管理</span>
+        </a>
+        
+        <a onclick="switchSection('proxy-ips')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">language</span>
+          <span>反代 IP</span>
+        </a>
+        
+        <a onclick="switchSection('best-domains')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">star</span>
+          <span>优选域名</span>
+        </a>
+        
+        <div class="pt-6 pb-2">
+          <div class="text-[10px] font-semibold text-muted-light dark:text-muted-dark uppercase tracking-wider mb-2 px-2">Sales</div>
+        </div>
+        
+        <a onclick="switchSection('plans')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <span>套餐管理</span>
+        </a>
+        
+        <a onclick="switchSection('orders')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span>订单管理</span>
+        </a>
+        
+        <a onclick="switchSection('announcements')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">campaign</span>
+          <span>公告管理</span>
+        </a>
+        
+        <div class="pt-6 pb-2">
+          <div class="text-[10px] font-semibold text-muted-light dark:text-muted-dark uppercase tracking-wider mb-2 px-2">System</div>
+        </div>
+        
+        <a onclick="switchSection('payment')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">payments</span>
+          <span>支付渠道</span>
+        </a>
+        
+        <a onclick="switchSection('invites')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">confirmation_number</span>
+          <span>邀请码</span>
+        </a>
+        
+        <a onclick="switchSection('password')" class="nav-link flex items-center gap-3 px-3 py-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined">lock</span>
+          <span>修改密码</span>
+        </a>
+      </nav>
+      
+      <div class="p-4 border-t border-border-light dark:border-border-dark space-y-2">
+        <button onclick="adminLogout()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-border-light dark:border-border-dark hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-sm font-medium">
+          <span class="material-symbols-outlined text-sm">logout</span>
+          退出登录
+        </button>
+      </div>
+    </aside>
+    
+    <!-- 主内容区 -->
+    <main class="flex-1 ml-64 min-h-screen">
+      <header class="h-16 border-b border-border-light dark:border-border-dark flex items-center justify-between px-8 bg-background-light dark:bg-background-dark">
+        <h1 id="section-title" class="text-xl font-bold tracking-tight">仪表盘概览</h1>
+        <div class="flex items-center gap-4">
+          <button class="p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-light dark:text-muted-dark" id="themeToggle">
+            <span class="material-symbols-outlined dark:hidden">dark_mode</span>
+            <span class="material-symbols-outlined hidden dark:block">light_mode</span>
+          </button>
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
+              <span class="material-symbols-outlined">person</span>
+            </div>
+            <span class="text-sm font-medium">Admin</span>
+          </div>
+        </div>
+      </header>
+      
+      <div class="p-8 space-y-8 max-w-7xl mx-auto">
+        <!-- 仪表盘部分 -->
+        <div id="section-dashboard" class="section-content active">
+          <section>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold tracking-tight">系统概览</h2>
+              <span class="text-xs text-muted-light dark:text-muted-dark">最后更新: <span id="last-update-time"></span></span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="p-6 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium text-muted-light dark:text-muted-dark">总用户数</span>
+                  <span class="material-symbols-outlined text-muted-light dark:text-muted-dark">group</span>
+                </div>
+                <div id="stat-total-users" class="text-3xl font-bold tracking-tight">0</div>
+                <div class="mt-2 text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1 font-medium">
+                  <span class="material-symbols-outlined text-xs">trending_up</span>
+                  系统总用户
+                </div>
+              </div>
+              
+              <div class="p-6 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium text-muted-light dark:text-muted-dark">活跃用户</span>
+                  <span class="material-symbols-outlined text-muted-light dark:text-muted-dark">bolt</span>
+                </div>
+                <div id="stat-active-users" class="text-3xl font-bold tracking-tight">0</div>
+                <div class="mt-2 text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1 font-medium">
+                  <span class="material-symbols-outlined text-xs">trending_up</span>
+                  未过期用户
+                </div>
+              </div>
+              
+              <div class="p-6 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium text-muted-light dark:text-muted-dark">配置节点数</span>
+                  <span class="material-symbols-outlined text-muted-light dark:text-muted-dark">dns</span>
+                </div>
+                <div id="stat-config-nodes" class="text-3xl font-bold tracking-tight">0</div>
+                <div class="mt-2 text-[10px] text-muted-light dark:text-muted-dark font-medium">
+                  正常运行中
+                </div>
+              </div>
+              
+              <div class="p-6 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium text-muted-light dark:text-muted-dark">已过期用户</span>
+                  <span class="material-symbols-outlined text-muted-light dark:text-muted-dark">event_busy</span>
+                </div>
+                <div id="stat-expired-users" class="text-3xl font-bold tracking-tight">0</div>
+                <div class="mt-2 text-[10px] text-red-600 dark:text-red-400 flex items-center gap-1 font-medium">
+                  <span class="material-symbols-outlined text-xs">warning</span>
+                  需要关注
+                </div>
+              </div>
+            </div>
+          </section>
+          
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-6">
+              <section class="rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark overflow-hidden">
+                <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+                  <div>
+                    <h3 class="font-semibold">核心配置</h3>
+                    <p class="text-xs text-muted-light dark:text-muted-dark">调整全局系统参数</p>
+                  </div>
+                  <span class="material-symbols-outlined text-muted-light">settings</span>
+                </div>
+                
+                <div class="p-6 space-y-6">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label class="text-sm font-medium block">新用户注册试用</label>
+                      <p class="text-xs text-muted-light dark:text-muted-dark">开启后，新注册用户自动获得免费试用时长</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input id="input-enableTrial" class="sr-only peer" type="checkbox"/>
+                      <div class="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                    </label>
+                  </div>
+                  
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                      <label class="text-xs font-semibold text-muted-light uppercase">试用时长 (天)</label>
+                      <select id="input-trialDays" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm focus:ring-1 focus:ring-primary outline-none">
+                        <option value="1">1 天</option>
+                        <option value="3">3 天</option>
+                        <option value="7">7 天</option>
+                      </select>
+                    </div>
+                    
+                    <div class="space-y-2">
+                      <label class="text-xs font-semibold text-muted-light uppercase">注册邀请码</label>
+                      <div class="flex items-center gap-4 mt-3">
+                        <span class="text-xs text-muted-light">强制开启邀请码注册</span>
+                        <input id="input-requireInviteCode" class="rounded border-zinc-300 dark:border-zinc-700 text-primary focus:ring-primary" type="checkbox"/>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="pt-4 border-t border-border-light dark:border-border-dark">
+                    <h4 class="text-xs font-semibold text-muted-light uppercase mb-4 tracking-wider">订单自动过期设置</h4>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                      <div class="space-y-2">
+                        <label class="text-xs font-medium">待审核订单时长</label>
+                        <select id="input-pendingOrderExpiry" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm outline-none">
+                          <option value="15">15 分钟</option>
+                          <option value="30">30 分钟</option>
+                          <option value="60">60 分钟</option>
+                        </select>
+                      </div>
+                      
+                      <div class="space-y-2">
+                        <label class="text-xs font-medium">支付订单时长</label>
+                        <select id="input-paymentOrderExpiry" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm outline-none">
+                          <option value="10">10 分钟</option>
+                          <option value="15">15 分钟</option>
+                          <option value="30">30 分钟</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 flex justify-end">
+                  <button onclick="saveSystemSettings()" class="bg-primary text-white text-sm font-medium px-4 py-2 rounded-md hover:opacity-90 transition-opacity">
+                    保存配置
+                  </button>
+                </div>
+              </section>
+            </div>
+            
+            <div class="space-y-6">
+              <section class="p-6 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                <h3 class="font-semibold mb-4 text-sm flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm">bolt</span>
+                  快速操作
+                </h3>
+                <div class="flex flex-wrap gap-2">
+                  <button onclick="switchSection('proxy-ips')" class="flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-zinc-800 transition-colors">
+                    <span class="material-symbols-outlined text-xs">public</span>
+                    反代 IP
+                  </button>
+                  <button onclick="switchSection('best-domains')" class="flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-zinc-800 transition-colors">
+                    <span class="material-symbols-outlined text-xs">star</span>
+                    优选域名
+                  </button>
+                  <button onclick="switchSection('users')" class="flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-zinc-800 transition-colors">
+                    <span class="material-symbols-outlined text-xs">person_add</span>
+                    用户管理
+                  </button>
+                </div>
+              </section>
+              
+              <section class="p-6 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark">
+                <h3 class="font-semibold mb-1 text-sm flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm">database</span>
+                  数据备份
+                </h3>
+                <p class="text-[10px] text-muted-light mb-4">导出或导入所有系统配置与用户数据</p>
+                
+                <div class="space-y-3">
+                  <button onclick="exportData()" class="w-full flex items-center justify-center gap-2 px-3 py-2 border border-border-light dark:border-border-dark rounded-md text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
+                    <span class="material-symbols-outlined text-xs">download</span>
+                    导出全部数据 (.JSON)
+                  </button>
+                  <button onclick="importData()" class="w-full flex items-center justify-center gap-2 px-3 py-2 border border-border-light dark:border-border-dark rounded-md text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
+                    <span class="material-symbols-outlined text-xs">upload_file</span>
+                    导入备份数据
+                  </button>
+                </div>
+                
+                <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-md">
+                  <p class="text-[10px] text-amber-700 dark:text-amber-500 leading-relaxed font-medium">
+                    <span class="font-bold">⚠️ 注意:</span> 导入操作会覆盖现有数据，建议操作前先导出备份。
+                  </p>
+                </div>
+              </section>
+            </div>
+          </div>
+          
+          <section class="rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark overflow-hidden">
+            <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+              <h3 class="font-semibold">最近注册用户</h3>
+              <button onclick="switchSection('users')" class="text-xs font-medium text-muted-light hover:text-primary transition-colors">查看全部</button>
+            </div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="bg-zinc-50 dark:bg-zinc-900/50 text-muted-light dark:text-muted-dark font-medium border-b border-border-light dark:border-border-dark">
+                    <th class="px-6 py-3">UID / 账号</th>
+                    <th class="px-6 py-3">注册时间</th>
+                    <th class="px-6 py-3">套餐状态</th>
+                    <th class="px-6 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body" class="divide-y divide-border-light dark:divide-border-dark">
+                  <tr>
+                    <td colspan="4" class="px-6 py-8 text-center text-muted-light">
+                      加载中...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        
+        <!-- 用户管理部分 -->
+        <div id="section-users" class="section-content">
+          <!-- 添加新用户 -->
+          <section class="mb-12">
+            <div class="mb-6">
+              <h2 class="text-2xl font-semibold tracking-tight">添加新用户</h2>
+              <p class="text-sm text-muted-light mt-1">填写以下信息以创建新的访问凭据</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-transparent">
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <label class="text-sm font-medium">备注名称</label>
+                  <input id="add-name" type="text" placeholder="默认 '未命名'" class="flex h-10 w-full rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"/>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-sm font-medium">前端用户名 <span class="text-xs font-normal text-muted-light">(留空随机生成)</span></label>
+                  <input id="add-front-username" type="text" placeholder="留空随机生成6位用户名" class="flex h-10 w-full rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"/>
+                </div>
+              </div>
+              <div class="space-y-4">
+                <div class="space-y-2">
+                  <label class="text-sm font-medium">到期时间</label>
+                  <input id="add-expiry" type="date" class="flex h-10 w-full rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"/>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-sm font-medium">前端密码 <span class="text-xs font-normal text-muted-light">(留空与用户名相同)</span></label>
+                  <input id="add-front-password" type="password" placeholder="留空默认与用户名相同" class="flex h-10 w-full rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"/>
+                </div>
+              </div>
+              <div class="md:col-span-2 space-y-2">
+                <label class="text-sm font-medium">自定义 UUID <span class="text-xs font-normal text-muted-light">(可选，支持批量)</span></label>
+                <textarea id="add-uuids" placeholder="留空自动生成单个UUID&#10;批量添加：一行一个UUID，或用逗号分隔" class="flex min-h-[80px] w-full rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"></textarea>
+              </div>
+            </div>
+            <div class="mt-6">
+              <button onclick="submitAddUser()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 h-10 px-8 py-2 transition-colors">
+                生成 / 添加用户
+              </button>
+            </div>
+          </section>
+
+          <!-- 用户列表 -->
+          <section class="space-y-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-2xl font-semibold tracking-tight">用户列表 (<span id="user-count">0</span>)</h2>
+                <p class="text-sm text-muted-light mt-1">管理现有的用户及其订阅状态</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="relative">
+                  <span class="material-symbols-outlined absolute left-3 top-2 text-muted-light text-sm">search</span>
+                  <input id="search-input" type="text" placeholder="搜索UUID或备注..." onkeyup="filterUsers()" class="h-9 w-[250px] pl-9 pr-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-xs focus:ring-1 focus:ring-primary outline-none"/>
+                </div>
+              </div>
+            </div>
+
+            <!-- 批量操作栏 -->
+            <div id="batch-bar" class="p-4 bg-blue-50 dark:bg-blue-950/20 border border-border-light dark:border-border-dark rounded-md hidden">
+              <div class="flex items-center gap-4">
+                <span class="text-sm">已选 <b id="sel-count">0</b> 个用户</span>
+                <button onclick="batchEnable()" class="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition-colors">批量启用</button>
+                <button onclick="batchDisable()" class="px-3 py-1.5 bg-yellow-600 text-white text-xs font-medium rounded hover:bg-yellow-700 transition-colors">批量禁用</button>
+                <button onclick="batchDelete()" class="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors">批量删除</button>
+              </div>
+            </div>
+
+            <!-- 用户表格 -->
+            <div class="rounded-md border border-border-light dark:border-border-dark overflow-hidden">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-border-light dark:border-border-dark">
+                    <th class="h-12 px-4 text-left align-middle font-medium text-muted-light w-[50px]">
+                      <input type="checkbox" id="check-all" onchange="toggleCheckAll()" class="rounded border-slate-300 dark:border-zinc-700 text-primary focus:ring-primary cursor-pointer"/>
+                    </th>
+                    <th class="h-12 px-4 text-left align-middle font-medium text-muted-light">UUID</th>
+                    <th class="h-12 px-4 text-left align-middle font-medium text-muted-light">备注</th>
+                    <th class="h-12 px-4 text-left align-middle font-medium text-muted-light">创建时间</th>
+                    <th class="h-12 px-4 text-left align-middle font-medium text-muted-light">到期时间</th>
+                    <th class="h-12 px-4 text-left align-middle font-medium text-muted-light">状态</th>
+                    <th class="h-12 px-4 text-right align-middle font-medium text-muted-light">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="users-list-body" class="divide-y divide-border-light dark:divide-border-dark">
+                  <tr>
+                    <td colspan="7" class="p-8 text-center text-muted-light">加载中...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        
+        <!-- 反代IP部分 -->
+        <div id="section-proxy-ips" class="section-content">
+          <div class="max-w-4xl space-y-10">
+            
+            <!-- 订阅设置部分 -->
+            <section class="space-y-6">
+              <div class="flex items-center gap-2 mb-4">
+                <h2 class="text-lg font-semibold tracking-tight">订阅设置</h2>
+              </div>
+              <div class="grid gap-6">
+                <div class="space-y-2">
+                  <label class="text-sm font-medium leading-none text-slate-700 dark:text-zinc-300">节点订阅地址</label>
+                  <input id="sub-url" type="text" class="flex h-10 w-full rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-300 transition-all" placeholder="ccffllyy.1412.me,cfly.de5.net"/>
+                  <p class="text-[0.8rem] text-slate-500 dark:text-zinc-400">支持多个地址，用英文逗号 (,) 分隔。用户复制订阅时将随机分配节点。</p>
+                </div>
+                <div class="space-y-2">
+                  <label class="text-sm font-medium leading-none text-slate-700 dark:text-zinc-300">官网地址</label>
+                  <input id="website-url" type="text" class="flex h-10 w-full rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-300 transition-all" placeholder="cfly.1412.me"/>
+                  <p class="text-[0.8rem] text-slate-500 dark:text-zinc-400">此地址显示在节点列表别名中，帮助用户识别官网。</p>
+                </div>
+              </div>
+            </section>
+            
+            <hr class="border-slate-200 dark:border-zinc-800"/>
+            
+            <!-- 反代IP列表部分 -->
+            <section class="space-y-6">
+              <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold tracking-tight">默认反代 IP 列表</h2>
+                <span id="proxy-ips-count" class="text-sm text-slate-500 dark:text-zinc-400">已配置 0 个</span>
+              </div>
+              
+              <div class="rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/30 p-4 mb-6">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-primary dark:text-zinc-400 mt-0.5">info</span>
+                  <p class="text-sm text-slate-600 dark:text-zinc-300 leading-relaxed">
+                    <span class="font-semibold text-primary dark:text-zinc-100">温馨提示:</span> 在代理地址中包含地区标识符 (如 HK/JP/US/SG)，系统会自动选择地区代理以提高速度。
+                  </p>
+                </div>
+              </div>
+              
+              <div class="flex flex-col gap-4">
+                <div class="flex gap-2">
+                  <textarea id="proxy-ips-batch-input" class="flex min-h-[120px] w-full rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm font-mono ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:ring-offset-zinc-950 dark:focus-visible:ring-zinc-300 transition-all" placeholder="批量添加，每行一个。支持地理标签。例如：\nProxyIP.HK.CMLiusss.net:443\nsjc.o00o.ooo:443\nkr.william.us.ci:443"></textarea>
+                  <button onclick="batchAddProxyIPs()" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 bg-primary dark:bg-white text-white dark:text-black hover:bg-primary/90 dark:hover:bg-zinc-100 h-10 px-4 py-2 self-start">
+                    添加
+                  </button>
+                </div>
+                
+                <div id="proxy-ips-list" class="rounded-md border border-slate-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-950">
+                  <div class="divide-y divide-slate-200 dark:divide-zinc-800">
+                    <div class="p-8 text-center text-slate-400 dark:text-zinc-600">
+                      <span class="material-symbols-outlined text-4xl mb-2">cloud_off</span>
+                      <p class="text-sm">暂无反代 IP</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            
+            <div class="pt-6 border-t border-slate-200 dark:border-zinc-800 flex justify-end gap-3">
+              <button onclick="loadProxyIPSettings()" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-slate-50 dark:hover:bg-zinc-900 h-11 px-6">
+                重置
+              </button>
+              <button onclick="saveAllProxyIPSettings()" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors bg-primary dark:bg-white text-white dark:text-black hover:bg-primary/90 dark:hover:bg-zinc-100 h-11 px-8">
+                保存配置
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div id="section-best-domains" class="section-content">
+          <div class="max-w-5xl space-y-6">
+            
+            <!-- Cron状态提示 -->
+            <div class="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-sm">
+              <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span class="text-xs font-medium text-slate-500 dark:text-zinc-400 uppercase tracking-wider">Cron 状态:</span>
+                  <span class="text-xs font-semibold">每15分钟执行</span>
+                </div>
+                <div class="h-4 w-[1px] bg-slate-200 dark:bg-zinc-800"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-medium text-slate-500 dark:text-zinc-400 uppercase tracking-wider">下次更新:</span>
+                  <span id="next-sync-countdown" class="text-xs font-mono font-medium text-primary dark:text-zinc-200">14:59</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-slate-400 dark:text-zinc-500">Docker 部署环境下自动同步</span>
+                <span class="material-symbols-outlined text-slate-400 dark:text-zinc-500 text-[18px]">info</span>
+              </div>
+            </div>
+            
+            <!-- 批量输入区 -->
+            <div class="space-y-4">
+              <div class="relative">
+                <textarea id="best-domains-batch-input" class="w-full min-h-[140px] p-4 text-sm font-mono bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-zinc-400 focus:border-zinc-400 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-zinc-600" placeholder="批量添加，一行一个\\n格式：域名/IP:端口#别名\\n例如：www.example.com:443#香港\\n例如：104.16.88.20:443#美国"></textarea>
+              </div>
+              
+              <div class="flex flex-wrap gap-3">
+                <button onclick="batchAddBestDomains()" class="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-md hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                  <span class="material-symbols-outlined text-[18px]">add</span> 批量添加
+                </button>
+                <button onclick="fetchIPv4BestDomains()" class="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-md hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                  <span class="material-symbols-outlined text-[18px]">bolt</span> 获取 IPv4 优选
+                </button>
+                <button onclick="fetchIPv6BestDomains()" class="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-md hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors">
+                  <span class="material-symbols-outlined text-[18px]">bolt</span> 获取 IPv6 优选
+                </button>
+                <div class="flex-1"></div>
+                <button onclick="clearAllBestDomains()" class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-500 hover:text-red-600 transition-colors">
+                  <span class="material-symbols-outlined text-[18px]">delete_sweep</span> 清空列表
+                </button>
+              </div>
+            </div>
+            
+            <!-- 标签切换 -->
+            <div class="w-full">
+              <div class="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 dark:bg-zinc-900 p-1 text-slate-500 dark:text-zinc-400 mb-4">
+                <button id="tab-domain-list" class="tab-trigger active inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50" onclick="switchBestDomainsTab('domain-list')">域名列表</button>
+                <button id="tab-node-status" class="tab-trigger inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50" onclick="switchBestDomainsTab('node-status')">节点状态</button>
+              </div>
+              
+              <!-- 域名列表视图 -->
+              <div id="tab-content-domain-list" class="tab-content active bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-sm overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/30 flex justify-between items-center">
+                  <span class="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">当前优选域名</span>
+                  <span id="best-domains-count" class="text-xs text-slate-400 dark:text-zinc-500">共 0 个条目</span>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50/30 dark:bg-zinc-900">
+                      <tr>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400 w-10"></th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">资源地址</th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">状态</th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="best-domains-list" class="divide-y divide-slate-100 dark:divide-zinc-800">
+                      <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600">
+                          <span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span>
+                          <p class="text-sm">暂无优选域名</p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <!-- 节点状态视图 -->
+              <div id="tab-content-node-status" class="tab-content bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-sm overflow-hidden" style="display: none;">
+                <div class="px-4 py-3 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/30 flex justify-between items-center">
+                  <span class="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">节点运行状态</span>
+                  <span id="node-status-time" class="text-xs text-slate-400 dark:text-zinc-500">最后检测: --:--:--</span>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50/30 dark:bg-zinc-900">
+                      <tr>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400 w-12 text-center">序号</th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">名称</th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">节点</th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">延迟</th>
+                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400 text-right">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody id="node-status-list" class="divide-y divide-slate-100 dark:divide-zinc-800">
+                      <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600">
+                          <span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span>
+                          <p class="text-sm">暂无节点状态数据</p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 底部操作 -->
+            <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-zinc-800">
+              <p class="text-xs text-slate-500 dark:text-zinc-500">
+                提示: 点击列表条目前方的拖拽手柄可手动排序。所有数据自动从 Cloudflare 边缘节点同步。
+              </p>
+              <div class="flex gap-3">
+                <button onclick="loadBestDomains()" class="px-4 py-2 text-sm font-medium border border-slate-200 dark:border-zinc-800 rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors">
+                  重置更改
+                </button>
+                <button onclick="saveAllBestDomains()" class="px-6 py-2 bg-primary dark:bg-white text-white dark:text-black text-sm font-semibold rounded-md hover:opacity-90 shadow-sm transition-opacity">
+                  保存并应用
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="section-plans" class="section-content">
+          <!-- 添加新套餐 -->
+          <section class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-200">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <h2 class="text-base font-semibold">添加新套餐</h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">创建可供用户订阅的服务计划</p>
+            </div>
+            <div class="p-6">
+              <form id="add-plan-form" class="grid grid-cols-1 md:grid-cols-6 gap-6">
+                <div class="md:col-span-2 space-y-2">
+                  <label class="text-sm font-medium text-slate-700 dark:text-slate-300">套餐名称</label>
+                  <input id="plan-name" class="w-full h-10 px-3 py-2 text-sm bg-transparent border border-slate-200 dark:border-slate-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-slate-400" placeholder="例如: 月度专业套餐" type="text" required/>
+                </div>
+                <div class="md:col-span-2 space-y-2">
+                  <label class="text-sm font-medium text-slate-700 dark:text-slate-300">时长 (天)</label>
+                  <input id="plan-duration" class="w-full h-10 px-3 py-2 text-sm bg-transparent border border-slate-200 dark:border-slate-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" type="number" min="1" value="30" required/>
+                </div>
+                <div class="md:col-span-2 space-y-2">
+                  <label class="text-sm font-medium text-slate-700 dark:text-slate-300">价格 (¥)</label>
+                  <input id="plan-price" class="w-full h-10 px-3 py-2 text-sm bg-transparent border border-slate-200 dark:border-slate-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-slate-400" placeholder="0.00" type="number" step="0.01" min="0" value="0" required/>
+                </div>
+                <div class="md:col-span-5 space-y-2">
+                  <label class="text-sm font-medium text-slate-700 dark:text-slate-300">套餐描述</label>
+                  <input id="plan-description" class="w-full h-10 px-3 py-2 text-sm bg-transparent border border-slate-200 dark:border-slate-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-slate-400" placeholder="简要说明套餐包含的功能和限制..." type="text"/>
+                </div>
+                <div class="md:col-span-1 flex items-end">
+                  <button type="button" onclick="addNewPlan()" class="w-full h-10 bg-primary text-white text-sm font-medium rounded-md hover:bg-slate-800 transition-colors shadow-sm flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">add</span>
+                    添加
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+          
+          <!-- 套餐列表 -->
+          <section class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all duration-200 mt-8">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
+              <div>
+                <h2 class="text-base font-semibold">套餐列表</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">管理当前已上架的订阅方案</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-[18px]">search</span>
+                  <input id="plan-search" onkeyup="filterPlans()" class="pl-9 pr-4 h-9 w-48 text-xs bg-transparent border border-slate-200 dark:border-slate-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary outline-none" placeholder="搜索套餐..." type="text"/>
+                </div>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-500 font-medium">
+                    <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">名称</th>
+                    <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">周期</th>
+                    <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">价格</th>
+                    <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">描述</th>
+                    <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">状态</th>
+                    <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="plans-list" class="divide-y divide-slate-100 dark:divide-slate-900">
+                  <tr>
+                    <td colspan="6" class="px-6 py-8 text-center text-slate-400">加载中...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+              <div id="plans-count">共 0 个套餐项目</div>
+            </div>
+          </section>
+        </div>
+        
+        <div id="section-orders" class="section-content">
+          <!-- 筛选和操作栏 -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+            <div class="flex items-center gap-4 flex-1">
+              <div class="relative w-full max-w-xs">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+                <input id="order-search" onkeyup="filterOrders()" class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" placeholder="搜索订单号或用户..." type="text"/>
+              </div>
+              <select id="order-status-filter" onchange="loadAllOrders()" class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm py-2 pl-3 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none">
+                <option value="all">全部订单</option>
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">已拒绝</option>
+                <option value="expired">已过期</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="exportOrders()" class="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:opacity-90 transition-opacity">
+                <span class="material-symbols-outlined text-sm">download</span>
+                导出数据
+              </button>
+            </div>
+          </div>
+          
+          <!-- 订单列表 -->
+          <div class="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">
+                    <input id="order-check-all" onchange="toggleAllOrderChecks()" class="rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary" type="checkbox"/>
+                  </th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">用户</th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">套餐</th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">金额</th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">创建时间</th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">状态</th>
+                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="orders-list" class="divide-y divide-slate-200 dark:divide-slate-800">
+                <tr>
+                  <td colspan="8" class="px-6 py-8 text-center text-slate-400">加载中...</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <span id="orders-count" class="text-sm text-slate-500">共 0 条订单</span>
+              <div class="flex items-center gap-2">
+                <button onclick="batchApproveOrders()" class="px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded transition-colors">批量通过</button>
+                <button onclick="batchRejectOrders()" class="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors">批量拒绝</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="section-announcements" class="section-content">
+          <!-- 添加新公告按钮 -->
+          <div class="mb-6 flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-semibold">公告列表</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">管理系统公告和通知信息</p>
+            </div>
+            <button onclick="openAddAnnouncementModal()" class="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:opacity-90 transition-opacity">
+              <span class="material-symbols-outlined text-sm">add</span>
+              添加公告
+            </button>
+          </div>
+          
+          <!-- 公告列表 -->
+          <div class="space-y-4" id="announcements-list">
+            <div class="text-center py-8 text-slate-400">加载中...</div>
+          </div>
+        </div>
+        
+        <div id="section-payment" class="section-content">
+          <!-- 添加支付渠道按钮 -->
+          <div class="mb-6 flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-semibold">支付渠道</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">管理在线支付通道配置</p>
+            </div>
+            <button onclick="openAddPaymentChannelModal()" class="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:opacity-90 transition-opacity">
+              <span class="material-symbols-outlined text-sm">add</span>
+              添加渠道
+            </button>
+          </div>
+          
+          <!-- 支付渠道列表 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="payment-channels-list">
+            <div class="col-span-2 text-center py-8 text-slate-400">加载中...</div>
+          </div>
+        </div>
+        
+        <div id="section-invites" class="section-content">
+          <!-- 生成邀请码区域 -->
+          <div class="bg-white dark:bg-zinc-900 p-6 border border-zinc-200 dark:border-zinc-800 rounded-lg mb-6">
+            <h2 class="text-sm font-medium text-zinc-500 mb-4">生成邀请码</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-zinc-700 dark:text-zinc-300">邀请码 <span class="text-zinc-400">(留空自动生成)</span></label>
+                <input id="gen-invite-code" type="text" placeholder="自动生成" class="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"/>
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-zinc-700 dark:text-zinc-300">可使用次数</label>
+                <input id="gen-max-uses" type="number" value="1" min="1" class="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"/>
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-zinc-700 dark:text-zinc-300">赠送试用天数</label>
+                <input id="gen-trial-days" type="number" value="0" min="0" class="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"/>
+              </div>
+              <div class="space-y-2">
+                <label class="text-xs font-medium text-zinc-700 dark:text-zinc-300">备注</label>
+                <input id="gen-remark" type="text" placeholder="可选" class="flex h-9 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"/>
+              </div>
+            </div>
+            <button onclick="generateInviteCode()" class="mt-4 inline-flex items-center justify-center rounded-md text-sm font-medium bg-black text-zinc-50 hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 h-9 px-4 py-2 transition-colors">
+              <span class="material-symbols-outlined text-sm mr-2">add</span>
+              生成邀请码
+            </button>
+          </div>
+          
+          <!-- 邀请码列表 -->
+          <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                    <th class="px-6 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">邀请码</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">使用情况</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">试用天数</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">备注</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider">状态</th>
+                    <th class="px-6 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="invites-list" class="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  <tr>
+                    <td colspan="6" class="px-6 py-8 text-center text-zinc-400">加载中...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="px-6 py-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800">
+              <span id="invites-count" class="text-sm text-zinc-500">共 0 个邀请码</span>
+            </div>
+          </div>
+        </div>
+        
+        <div id="section-password" class="section-content">
+          <div class="rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark overflow-hidden">
+            <div class="p-6 border-b border-border-light dark:border-border-dark">
+              <h2 class="text-lg font-semibold">修改密码</h2>
+            </div>
+            <div class="p-6 space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">旧密码</label>
+                <input id="oldPassword" type="password" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm outline-none focus:ring-1 focus:ring-primary"/>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">新密码</label>
+                <input id="newPassword" type="password" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm outline-none focus:ring-1 focus:ring-primary"/>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">确认新密码</label>
+                <input id="confirmPassword" type="password" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-sm outline-none focus:ring-1 focus:ring-primary"/>
+              </div>
+              <button onclick="changePassword()" class="bg-primary text-white text-sm font-medium px-4 py-2 rounded-md hover:opacity-90 transition-opacity">
+                修改密码
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <script>
+    // 主题切换
+    const themeToggle = document.getElementById('themeToggle');
+    const htmlElement = document.documentElement;
+    
+    if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      htmlElement.classList.add('dark');
+    }
+    
+    themeToggle.addEventListener('click', () => {
+      if (htmlElement.classList.contains('dark')) {
+        htmlElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      } else {
+        htmlElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      }
+    });
+    
+    // 页面切换
+    function switchSection(sectionName, skipSave) {
+      // 隐藏所有部分
+      document.querySelectorAll('.section-content').forEach(el => {
+        el.classList.remove('active');
+      });
+      
+      // 显示目标部分
+      const targetSection = document.getElementById('section-' + sectionName);
+      if (targetSection) {
+        targetSection.classList.add('active');
+      }
+      
+      // 保存当前section
+      if (!skipSave) {
+        localStorage.setItem('currentSection', sectionName);
+      }
+      
+      // 更新导航高亮
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('bg-zinc-100', 'dark:bg-zinc-800', 'text-primary', 'dark:text-white', 'font-medium');
+      });
+      
+      const targetLink = document.querySelector('[onclick*="' + sectionName + '"]');
+      if (targetLink) {
+        targetLink.closest('.nav-link').classList.add('bg-zinc-100', 'dark:bg-zinc-800', 'text-primary', 'dark:text-white', 'font-medium');
+      }
+      
+      // 更新标题
+      const titles = {
+        'dashboard': '仪表盘概览',
+        'users': '用户管理',
+        'proxy-ips': '反代 IP 管理',
+        'best-domains': '优选域名管理',
+        'plans': '套餐管理',
+        'orders': '订单管理',
+        'announcements': '公告管理',
+        'payment': '支付渠道',
+        'invites': '邀请码管理',
+        'password': '修改密码'
+      };
+      document.getElementById('section-title').textContent = titles[sectionName] || '管理面板';
+      
+      // 切换到对应页面时加载数据
+      if (sectionName === 'users') loadAllUsers();
+      if (sectionName === 'proxy-ips') loadProxyIPSettings();
+      if (sectionName === 'best-domains') loadBestDomains();
+      if (sectionName === 'plans') loadAllPlans();
+      if (sectionName === 'orders') loadAllOrders();
+      if (sectionName === 'announcements') loadAllAnnouncements();
+      if (sectionName === 'payment') loadAllPaymentChannels();
+      if (sectionName === 'invites') loadAllInviteCodes();
+    }
+    
+    // 页面加载时恢复上次浏览的section
+    const lastSection = localStorage.getItem('currentSection');
+    if (lastSection && lastSection !== 'dashboard') {
+      switchSection(lastSection, true);
+    } else {
+      // 默认加载用户列表
+      loadAllUsers();
+    }
+    
+    // ========== 模态框控制 ==========
+    function openModal(title, bodyHtml, maxWidth, subtitle) {
+      const modalContent = document.getElementById('modal-content');
+      if (maxWidth) {
+        modalContent.className = 'bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 w-full mx-4 rounded-xl shadow-none overflow-hidden transform scale-100 transition-all duration-300 ' + maxWidth;
+      } else {
+        modalContent.className = 'bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 w-full max-w-2xl mx-4 rounded-xl shadow-none overflow-hidden transform scale-100 transition-all duration-300';
+      }
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-subtitle').textContent = subtitle || '';
+      document.getElementById('modal-body').innerHTML = bodyHtml;
+      document.getElementById('modal-overlay').classList.add('modal-show');
+    }
+    
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('modal-show');
+    }
+    
+    // ========== 自定义Alert弹窗 ==========
+    function showAlert(message, type = 'info') {
+      const overlay = document.getElementById('custom-alert-overlay');
+      const icon = document.getElementById('alert-icon');
+      const iconSpan = icon.querySelector('.material-symbols-outlined');
+      const title = document.getElementById('alert-title');
+      const messageEl = document.getElementById('alert-message');
+      
+      // 根据类型设置图标和样式
+      const types = {
+        success: {
+          icon: 'check_circle',
+          title: '成功',
+          bgClass: 'bg-emerald-100 dark:bg-emerald-900/30',
+          iconClass: 'text-emerald-600 dark:text-emerald-400'
+        },
+        error: {
+          icon: 'error',
+          title: '错误',
+          bgClass: 'bg-red-100 dark:bg-red-900/30',
+          iconClass: 'text-red-600 dark:text-red-400'
+        },
+        warning: {
+          icon: 'warning',
+          title: '警告',
+          bgClass: 'bg-amber-100 dark:bg-amber-900/30',
+          iconClass: 'text-amber-600 dark:text-amber-400'
+        },
+        info: {
+          icon: 'info',
+          title: '提示',
+          bgClass: 'bg-blue-100 dark:bg-blue-900/30',
+          iconClass: 'text-blue-600 dark:text-blue-400'
+        }
+      };
+      
+      const config = types[type] || types.info;
+      
+      icon.className = 'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ' + config.bgClass;
+      iconSpan.className = 'material-symbols-outlined text-2xl ' + config.iconClass;
+      iconSpan.textContent = config.icon;
+      title.textContent = config.title;
+      messageEl.textContent = message;
+      
+      overlay.classList.add('opacity-100', 'pointer-events-auto');
+      overlay.querySelector('div').classList.add('scale-100');
+      overlay.querySelector('div').classList.remove('scale-95');
+    }
+    
+    function closeCustomAlert() {
+      const overlay = document.getElementById('custom-alert-overlay');
+      overlay.classList.remove('opacity-100', 'pointer-events-auto');
+      overlay.querySelector('div').classList.remove('scale-100');
+      overlay.querySelector('div').classList.add('scale-95');
+    }
+    
+    // ========== 自定义Confirm弹窗 ==========
+    let confirmCallback = null;
+    
+    function showConfirm(message, title = '确认操作') {
+      return new Promise((resolve) => {
+        const overlay = document.getElementById('custom-confirm-overlay');
+        const titleEl = document.getElementById('confirm-title');
+        const messageEl = document.getElementById('confirm-message');
+        
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        
+        confirmCallback = resolve;
+        
+        overlay.classList.add('opacity-100', 'pointer-events-auto');
+        overlay.querySelector('div').classList.add('scale-100');
+        overlay.querySelector('div').classList.remove('scale-95');
+      });
+    }
+    
+    function closeCustomConfirm(result) {
+      const overlay = document.getElementById('custom-confirm-overlay');
+      overlay.classList.remove('opacity-100', 'pointer-events-auto');
+      overlay.querySelector('div').classList.remove('scale-100');
+      overlay.querySelector('div').classList.add('scale-95');
+      
+      if (confirmCallback) {
+        confirmCallback(result);
+        confirmCallback = null;
+      }
+    }
+    
+    // 重写原生alert和confirm
+    window.alert = function(message) {
+      // 解析消息类型
+      let type = 'info';
+      let cleanMessage = message;
+      
+      if (message.startsWith('✅')) {
+        type = 'success';
+        cleanMessage = message.replace(/^✅\s*/, '');
+      } else if (message.startsWith('❌')) {
+        type = 'error';
+        cleanMessage = message.replace(/^❌\s*/, '');
+      } else if (message.startsWith('⚠️')) {
+        type = 'warning';
+        cleanMessage = message.replace(/^⚠️\s*/, '');
+      } else if (message.startsWith('⏳')) {
+        type = 'info';
+        cleanMessage = message.replace(/^⏳\s*/, '');
+      }
+      
+      showAlert(cleanMessage, type);
+    };
+    
+    window.confirm = function(message) {
+      const cleanMessage = message.replace(/^⚠️\s*/, '');
+      return showConfirm(cleanMessage);
+    };
+    
+    // ========== 用户管理功能 ==========
+    let allUsersData = [];
+    
+    async function loadAllUsers() {
+      try {
+        const response = await fetch('/api/admin/users');
+        if (!response.ok) throw new Error('Failed to fetch users');
+        
+        const result = await response.json();
+        const users = result.users || [];
+        allUsersData = users;
+        
+        // 更新用户数量
+        document.getElementById('user-count').textContent = users.length;
+        
+        const tbody = document.getElementById('users-list-body');
+        tbody.innerHTML = '';
+        
+        if (users.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-muted-light">暂无用户数据</td></tr>';
+          return;
+        }
+        
+        // 一次性渲染所有用户
+        users.forEach(u => {
+          const isExpired = u.expiry && u.expiry < Date.now();
+          const isEnabled = u.enabled;
+          
+          let statusBadge = '';
+          
+          if (!u.expiry) {
+            statusBadge = '<span class="inline-flex items-center rounded-full border border-border-light dark:border-border-dark bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-slate-400">未激活</span>';
+          } else if (isExpired) {
+            statusBadge = '<span class="inline-flex items-center rounded-full border border-border-light dark:border-border-dark bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-slate-400">已过期</span>';
+          } else if (!isEnabled) {
+            statusBadge = '<span class="inline-flex items-center rounded-full border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">已禁用</span>';
+          } else {
+            statusBadge = '<span class="inline-flex items-center rounded-full border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950 px-2.5 py-0.5 text-xs font-semibold text-green-600 dark:text-green-400">正常</span>';
+          }
+          
+          const expiryTime = u.expiry 
+            ? new Date(u.expiry).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              }).replace(/\\//g, '-')
+            : '未激活';
+          
+          const createTime = u.createAt 
+            ? new Date(u.createAt).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              }).replace(/\\//g, '-')
+            : '-';
+          
+          const row = '<tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 transition-colors">' +
+            '<td class="p-4 align-middle">' +
+              '<input type="checkbox" class="u-check rounded border-slate-300 dark:border-zinc-700 text-primary focus:ring-primary cursor-pointer" value="'+ u.uuid +'" onchange="updateBatchBar()" data-name="'+ (u.name || '') +'"/>' +
+            '</td>' +
+            '<td class="p-4 align-middle font-mono text-[13px] text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onclick="copy(\\'+ u.uuid +'\\')" title="点击复制">'+ u.uuid +'</td>' +
+            '<td class="p-4 align-middle">'+ (u.name || '-') +'</td>' +
+            '<td class="p-4 align-middle text-muted-light">'+ createTime +'</td>' +
+            '<td class="p-4 align-middle text-muted-light">'+ expiryTime +'</td>' +
+            '<td class="p-4 align-middle">'+ statusBadge +'</td>' +
+            '<td class="p-4 align-middle text-right">' +
+              '<div class="relative inline-block">' +
+                '<button id="menu-btn-' + u.uuid + '" onclick="toggleUserMenu(\\'+ u.uuid +'\\')" class="user-menu-btn h-8 w-8 inline-flex items-center justify-center rounded-md border border-border-light dark:border-border-dark hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">' +
+                  '<span class="material-symbols-outlined text-sm">more_horiz</span>' +
+                '</button>' +
+                '<div id="menu-'+ u.uuid +'" class="user-menu hidden absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-border-light dark:border-border-dark rounded-md shadow-lg z-50">' +
+                  '<div class="py-1">' +
+                    '<button onclick="showSubLinkModal(\\'+ u.uuid +'\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">link</span>订阅链接' +
+                    '</button>' +
+                    '<button onclick="openEditUser(\\'+ u.uuid +'\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">edit</span>编辑' +
+                    '</button>' +
+                    (isEnabled && !isExpired ? 
+                      '<button onclick="toggleUserStatus(\\'+ u.uuid +'\\',false)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                        '<span class="material-symbols-outlined text-sm">block</span>禁用' +
+                      '</button>' :
+                      (!isEnabled && !isExpired ? 
+                        '<button onclick="toggleUserStatus(\\'+ u.uuid +'\\',true)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                          '<span class="material-symbols-outlined text-sm">check_circle</span>启用' +
+                        '</button>' : '')
+                    ) +
+                    (!isExpired ? 
+                      '<button onclick="openRenewUser(\\'+ u.uuid +'\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                        '<span class="material-symbols-outlined text-sm">schedule</span>续期' +
+                      '</button>' : ''
+                    ) +
+                    '<button onclick="confirmResetUUID(\\'+ u.uuid +'\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">refresh</span>重置UUID' +
+                    '</button>' +
+                    '<div class="border-t border-border-light dark:border-border-dark"></div>' +
+                    '<button onclick="deleteUser(\\'+ u.uuid +'\\')" class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">delete</span>删除' +
+                    '</button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</td>' +
+          '</tr>';
+          
+          tbody.innerHTML += row;
+        });
+      } catch (error) {
+        console.error('加载用户列表失败:', error);
+        document.getElementById('users-list-body').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-red-600">加载失败: '+ error.message +'</td></tr>';
+      }
+    }
+    
+    function openAddUserModal() {
+      const bodyHtml = '<div class=\"space-y-4\">' +
+        '<div class=\"space-y-2\">' +
+          '<label class=\"text-sm font-medium\">用户名</label>' +
+          '<input id=\"new-username\" type=\"text\" placeholder=\"请输入用户名\" class=\"w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary\">' +
+        '</div>' +
+        '<div class=\"space-y-2\">' +
+          '<label class=\"text-sm font-medium\">到期时间</label>' +
+          '<input id=\"new-expiry\" type=\"datetime-local\" class=\"w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary\">' +
+          '<p class=\"text-xs text-muted-light\">留空则为永久有效</p>' +
+        '</div>' +
+        '<div class=\"space-y-2\">' +
+          '<label class=\"text-sm font-medium\">关联 UUID (可选)</label>' +
+          '<input id=\"new-linked-uuid\" type=\"text\" placeholder=\"留空则自动生成\" class=\"w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary\">' +
+        '</div>' +
+      '</div>' +
+      '<div class=\"flex justify-end gap-2 mt-6\">' +
+        '<button onclick=\"closeModal()\" class=\"px-4 py-2 text-sm font-medium border border-border-light dark:border-border-dark rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900\">取消</button>' +
+        '<button onclick=\"submitAddUser()\" class=\"px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:opacity-90\">添加用户</button>' +
+      '</div>';
+      openModal('添加用户', bodyHtml);
+    }
+    
+    async function submitAddUser() {
+      const name = document.getElementById('add-name').value.trim() || '未命名';
+      const expiryDate = document.getElementById('add-expiry').value;
+      const frontUsername = document.getElementById('add-front-username').value.trim();
+      const frontPassword = document.getElementById('add-front-password').value.trim();
+      const uuids = document.getElementById('add-uuids').value.trim();
+      
+      try {
+        const response = await fetch('/api/admin/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            name, 
+            expiryDate,
+            frontUsername,
+            frontPassword,
+            uuids
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('用户添加成功', 'success');
+          // 清空表单
+          document.getElementById('add-name').value = '';
+          document.getElementById('add-expiry').value = '';
+          document.getElementById('add-front-username').value = '';
+          document.getElementById('add-front-password').value = '';
+          document.getElementById('add-uuids').value = '';
+          loadAllUsers();
+        } else {
+          showAlert('添加失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('添加失败: ' + error.message, 'error');
+      }
+    }
+    
+    // 切换用户菜单
+    function toggleUserMenu(uuid) {
+      // 关闭所有其他菜单
+      document.querySelectorAll('.user-menu').forEach(menu => {
+        if (menu.id !== 'menu-' + uuid) {
+          menu.classList.add('hidden');
+        }
+      });
+      
+      const menu = document.getElementById('menu-' + uuid);
+      const button = document.getElementById('menu-btn-' + uuid);
+      
+      if (menu && button) {
+        const isHidden = menu.classList.contains('hidden');
+        
+        if (isHidden) {
+          // 获取按钮位置
+          const buttonRect = button.getBoundingClientRect();
+          const windowHeight = window.innerHeight;
+          
+          // 估算菜单高度（根据菜单项数量）
+          const menuItems = menu.querySelectorAll('button').length;
+          const estimatedMenuHeight = menuItems * 40 + 16; // 每项约40px + padding
+          
+          // 判断是否需要向上弹出
+          const spaceBelow = windowHeight - buttonRect.bottom;
+          const shouldPopUp = spaceBelow < estimatedMenuHeight + 20; // 留20px余量
+          
+          // 移除之前的定位类
+          menu.classList.remove('bottom-full', 'mb-2');
+          menu.style.removeProperty('top');
+          menu.style.removeProperty('bottom');
+          
+          if (shouldPopUp) {
+            // 向上弹出
+            menu.classList.add('bottom-full', 'mb-2');
+          } else {
+            // 向下弹出（默认）
+            menu.classList.remove('bottom-full', 'mb-2');
+          }
+          
+          menu.classList.remove('hidden');
+        } else {
+          menu.classList.add('hidden');
+        }
+      }
+    }
+    
+    // 点击页面其他地方关闭菜单
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.user-menu-btn') && !e.target.closest('.user-menu')) {
+        document.querySelectorAll('.user-menu').forEach(menu => menu.classList.add('hidden'));
+      }
+    });
+    
+    // 搜索用户
+    function filterUsers() {
+      const searchText = document.getElementById('search-input').value.toLowerCase();
+      const rows = document.querySelectorAll('#users-list-body tr');
+      
+      rows.forEach(row => {
+        const uuid = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
+        const name = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
+        
+        if (uuid.includes(searchText) || name.includes(searchText)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+    
+    // 确认重置UUID
+    async function confirmResetUUID(uuid) {
+      const confirmed = await showConfirm('确定要重置该用户的 UUID 吗？\n\n⚠️ 此操作将导致用户需要重新配置客户端！', '重置UUID');
+      if (!confirmed) return;
+      await resetUserUUID(uuid);
+    }
+    
+    async function openEditUserModal(uuid) {
+      try {
+        const response = await fetch('/api/admin/user/' + uuid);
+        if (!response.ok) throw new Error('Failed to fetch user');
+        
+        const user = await response.json();
+        const account = allUsersData.find(u => u.uuid === uuid);
+        
+        const expiryValue = user.expiry ? new Date(user.expiry).toISOString().slice(0, 16) : '';
+        
+        const bodyHtml = '<div class=\"space-y-4\">' +
+          '<div class=\"space-y-2\">' +
+            '<label class=\"text-sm font-medium\">UUID</label>' +
+            '<input type=\"text\" value=\"' + uuid + '\" disabled class=\"w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-zinc-50 dark:bg-zinc-900 text-sm text-muted-light font-mono\">' +
+          '</div>' +
+          '<div class=\"space-y-2\">' +
+            '<label class=\"text-sm font-medium\">用户名</label>' +
+            '<input id=\"edit-username\" type=\"text\" value=\"' + (account?.account || '') + '\" class=\"w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary\">' +
+          '</div>' +
+          '<div class=\"space-y-2\">' +
+            '<label class=\"text-sm font-medium\">到期时间</label>' +
+            '<input id=\"edit-expiry\" type=\"datetime-local\" value=\"' + expiryValue + '\" class=\"w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary\">' +
+          '</div>' +
+          '<div class=\"space-y-2\">' +
+            '<label class=\"text-sm font-medium\">状态</label>' +
+            '<label class=\"flex items-center gap-2 cursor-pointer\">' +
+              '<input id=\"edit-enabled\" type=\"checkbox\" ' + (user.enabled ? 'checked' : '') + ' class=\"rounded border-zinc-300 dark:border-zinc-700 text-primary focus:ring-primary\">' +
+              '<span class=\"text-sm\">启用用户</span>' +
+            '</label>' +
+          '</div>' +
+        '</div>' +
+        '<div class=\"flex justify-end gap-2 mt-6\">' +
+          '<button onclick=\"closeModal()\" class=\"px-4 py-2 text-sm font-medium border border-border-light dark:border-border-dark rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900\">取消</button>' +
+          "<button onclick=\"submitEditUser('" + uuid + "')\" class=\"px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:opacity-90\">保存修改</button>" +
+        '</div>';
+        openModal('编辑用户', bodyHtml);
+      } catch (error) {
+        showAlert('加载用户信息失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function submitEditUser(uuid) {
+      const username = document.getElementById('edit-username').value.trim();
+      const expiryInput = document.getElementById('edit-expiry').value;
+      const enabled = document.getElementById('edit-enabled').checked;
+      
+      const expiry = expiryInput ? new Date(expiryInput).getTime() : null;
+      
+      try {
+        const response = await fetch('/api/admin/user/' + uuid, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account: username, expiry, enabled })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('用户信息已更新', 'success');
+          closeModal();
+          loadAllUsers();
+        } else {
+          showAlert('更新失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('更新失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function resetUserUUID(uuid) {
+      const confirmed = await showConfirm('确定要重置该用户的 UUID 吗？\n\n⚠️ 此操作将导致用户需要重新配置客户端！', '重置UUID');
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/reset-uuid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuid })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('UUID 已重置\n\n新 UUID: ' + result.newUuid, 'success');
+          loadAllUsers();
+        } else {
+          showAlert('重置失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('重置失败: ' + error.message, 'error');
+      }
+    }
+    
+    // 批量操作相关函数
+    function toggleCheckAll() {
+      const checkAll = document.getElementById('check-all');
+      const checkboxes = document.querySelectorAll('.u-check');
+      checkboxes.forEach(cb => cb.checked = checkAll.checked);
+      updateBatchBar();
+    }
+    
+    function updateBatchBar() {
+      const checked = document.querySelectorAll('.u-check:checked');
+      const count = checked.length;
+      const bar = document.getElementById('batch-bar');
+      const countSpan = document.getElementById('sel-count');
+      
+      if (count > 0) {
+        bar.classList.remove('hidden');
+        countSpan.textContent = count;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+    
+    async function batchEnable() {
+      const checked = Array.from(document.querySelectorAll('.u-check:checked'));
+      if (checked.length === 0) return;
+      
+      const confirmed = await showConfirm('确定要启用选中的 ' + checked.length + ' 个用户吗？', '批量启用');
+      if (!confirmed) return;
+      
+      try {
+        const uuids = checked.map(cb => cb.value).join(',');
+        const response = await fetch('/api/admin/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuids, enabled: 'true' })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showAlert('批量启用成功', 'success');
+          loadAllUsers();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function batchDisable() {
+      const checked = Array.from(document.querySelectorAll('.u-check:checked'));
+      if (checked.length === 0) return;
+      
+      const confirmed = await showConfirm('确定要禁用选中的 ' + checked.length + ' 个用户吗？', '批量禁用');
+      if (!confirmed) return;
+      
+      try {
+        const uuids = checked.map(cb => cb.value).join(',');
+        const response = await fetch('/api/admin/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuids, enabled: 'false' })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showAlert('批量禁用成功', 'success');
+          loadAllUsers();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function batchDelete() {
+      const checked = Array.from(document.querySelectorAll('.u-check:checked'));
+      if (checked.length === 0) return;
+      
+      const confirmed = await showConfirm('确定要删除选中的 ' + checked.length + ' 个用户吗？\n\n⚠️ 此操作不可恢复！', '批量删除');
+      if (!confirmed) return;
+      
+      try {
+        const uuids = checked.map(cb => cb.value).join(',');
+        const response = await fetch('/api/admin/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuids })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showAlert('批量删除成功', 'success');
+          loadAllUsers();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function toggleUserStatus(uuid, enable) {
+      try {
+        const response = await fetch('/api/admin/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuids: uuid, enabled: String(enable) })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showAlert(enable ? '已启用' : '已禁用', 'success');
+          loadAllUsers();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    function openEditUser(uuid) {
+      const user = allUsersData.find(u => u.uuid === uuid);
+      if (!user) return;
+      
+      const expiryDate = user.expiry ? new Date(user.expiry).toISOString().slice(0,16) : '';
+      
+      const bodyHtml = '<div class="space-y-4">' +
+        '<input type="hidden" id="edit-uuid" value="'+ uuid +'">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">备注名称</label>' +
+          '<input id="edit-name" type="text" value="'+ (user.name || '') +'" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">到期时间</label>' +
+          '<input id="edit-expiry" type="datetime-local" value="'+ expiryDate +'" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">前端用户名 <span class="text-xs text-muted-light">(留空不修改)</span></label>' +
+          '<input id="edit-front-username" type="text" placeholder="留空不修改" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">前端密码 <span class="text-xs text-muted-light">(留空不修改)</span></label>' +
+          '<input id="edit-front-password" type="password" placeholder="留空不修改" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex justify-end gap-2 mt-6">' +
+        '<button onclick="closeModal()" class="px-4 py-2 text-sm font-medium border border-border-light dark:border-border-dark rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900">取消</button>' +
+        '<button onclick="saveEditUser()" class="px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:opacity-90">保存</button>' +
+      '</div>';
+      
+      openModal('编辑用户', bodyHtml);
+    }
+    
+    async function saveEditUser() {
+      const uuid = document.getElementById('edit-uuid').value;
+      const name = document.getElementById('edit-name').value.trim();
+      const expiryInput = document.getElementById('edit-expiry').value;
+      const frontUsername = document.getElementById('edit-front-username').value.trim();
+      const frontPassword = document.getElementById('edit-front-password').value.trim();
+      const expiry = expiryInput ? new Date(expiryInput).getTime() : null;
+      
+      const data = { uuid, name, expiry };
+      if (frontUsername) data.frontUsername = frontUsername;
+      if (frontPassword) data.frontPassword = frontPassword;
+      
+      try {
+        const response = await fetch('/api/admin/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showAlert('更新成功', 'success');
+          closeModal();
+          loadAllUsers();
+        } else {
+          showAlert('更新失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('更新失败: ' + error.message, 'error');
+      }
+    }
+    
+    function openRenewUser(uuid) {
+      const bodyHtml = '<div class="space-y-4">' +
+        '<input type="hidden" id="renew-uuid" value="'+ uuid +'">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">续期天数</label>' +
+          '<input id="renew-days" type="number" min="1" value="30" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+          '<p class="text-xs text-muted-light">在现有到期时间基础上增加天数</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex justify-end gap-2 mt-6">' +
+        '<button onclick="closeModal()" class="px-4 py-2 text-sm font-medium border border-border-light dark:border-border-dark rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900">取消</button>' +
+        '<button onclick="saveRenewUser()" class="px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:opacity-90">续期</button>' +
+      '</div>';
+      
+      openModal('用户续期', bodyHtml);
+    }
+    
+    async function saveRenewUser() {
+      const uuid = document.getElementById('renew-uuid').value;
+      const days = parseInt(document.getElementById('renew-days').value);
+      
+      if (!days || days <= 0) {
+        showAlert('请输入有效的天数', 'warning');
+        return;
+      }
+      
+      const user = allUsersData.find(u => u.uuid === uuid);
+      if (!user) return;
+      
+      // 如果已过期或未激活，从当前时间开始计算；否则从到期时间延长
+      const now = Date.now();
+      const baseTime = (user.expiry && user.expiry > now) ? user.expiry : now;
+      const newExpiry = baseTime + (days * 24 * 60 * 60 * 1000);
+      
+      try {
+        const response = await fetch('/api/admin/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuid, expiry: newExpiry })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showAlert('续期成功', 'success');
+          closeModal();
+          loadAllUsers();
+        } else {
+          showAlert('续期失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('续期失败: ' + error.message, 'error');
+      }
+    }
+    
+    // 复制到剪贴板函数
+    function copyToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showAlert('已复制到剪贴板', 'success');
+        }).catch(err => {
+          // 降级方案
+          fallbackCopyToClipboard(text);
+        });
+      } else {
+        fallbackCopyToClipboard(text);
+      }
+    }
+    
+    // 降级复制方案
+    function fallbackCopyToClipboard(text) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        showAlert('已复制到剪贴板', 'success');
+      } catch (err) {
+        showAlert('复制失败，请手动复制', 'error');
+      }
+      document.body.removeChild(textArea);
+    }
+    
+    function copySubOriginal(uuid) {
+      const subUrl = window.location.origin + '/api/sub/' + uuid;
+      copyToClipboard(subUrl);
+    }
+    
+    // 显示订阅链接选择弹窗
+    let currentSubUuid = '';
+    function showSubLinkModal(uuid) {
+      currentSubUuid = uuid;
+      const modal = document.getElementById('sub-link-modal');
+      const buttonsContainer = document.getElementById('sub-link-buttons');
+      
+      // 定义客户端列表（与用户前端一致）
+      const clients = [
+        { name: '通用订阅', value: 'original', icon: 'link' },
+        { name: 'Clash', value: 'clash', icon: 'cloud' },
+        { name: 'Surge', value: 'surge', icon: 'waves' },
+        { name: 'Shadowrocket', value: 'shadowrocket', icon: 'rocket_launch' },
+        { name: 'Quantumult X', value: 'quantumult', icon: 'speed' },
+        { name: 'Sing-box', value: 'sing-box', icon: 'music_note' }
+      ];
+      
+      // 生成按钮
+      buttonsContainer.innerHTML = clients.map(client => 
+        '<button onclick="copySubLinkAndClose(\\\''+ client.value +'\\\')" class="flex flex-col items-center gap-2 p-4 bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg border border-slate-200 dark:border-zinc-800 transition-colors">' +
+          '<span class="material-symbols-outlined text-2xl text-slate-700 dark:text-zinc-300">' + client.icon + '</span>' +
+          '<span class="text-sm font-medium text-slate-900 dark:text-zinc-100">' + client.name + '</span>' +
+        '</button>'
+      ).join('');
+      
+      // 显示弹窗
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modal.classList.add('modal-show');
+      
+      // 关闭用户菜单
+      const menu = document.getElementById('menu-' + uuid);
+      if (menu) {
+        menu.classList.add('hidden');
+      }
+    }
+    
+    function closeSubLinkModal() {
+      const modal = document.getElementById('sub-link-modal');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      modal.classList.remove('modal-show');
+      currentSubUuid = '';
+    }
+    
+    function copySubLinkAndClose(client) {
+      copySubLink(currentSubUuid, client);
+      closeSubLinkModal();
+    }
+    
+    // 复制不同客户端的订阅链接
+    async function copySubLink(uuid, client) {
+      // 获取系统设置中的订阅地址
+      let subUrlConfig = '';
+      try {
+        const response = await fetch('/api/admin/getSystemSettings');
+        const data = await response.json();
+        if (data.success && data.settings.subUrl) {
+          subUrlConfig = data.settings.subUrl;
+        }
+      } catch (error) {
+        console.error('获取订阅地址失败:', error);
+      }
+      
+      // 如果没有配置订阅地址，使用默认值
+      if (!subUrlConfig) {
+        subUrlConfig = window.location.origin;
+      }
+      
+      // 确保 URL 有 https:// 前缀
+      let normalizedSubUrl = subUrlConfig.trim();
+      if (!normalizedSubUrl.startsWith('http://') && !normalizedSubUrl.startsWith('https://')) {
+        normalizedSubUrl = 'https://' + normalizedSubUrl;
+      }
+      
+      // 构建原始订阅URL
+      const originalUrl = normalizedSubUrl + '/' + uuid;
+      
+      // 订阅转换配置
+      const apiBaseUrl = 'https://url.v1.mk/sub';
+      let finalUrl, clientName;
+      
+      // 根据客户端类型生成订阅链接
+      if (client === 'original') {
+        // 通用订阅：直接使用原始URL
+        finalUrl = originalUrl;
+        clientName = '通用订阅';
+      } else {
+        // 其他客户端：使用订阅转换
+        const clientNames = {
+          'clash': 'Clash',
+          'surge': 'Surge',
+          'shadowrocket': 'Shadowrocket',
+          'quantumult': 'Quantumult X',
+          'sing-box': 'Sing-box',
+          'v2ray': 'V2Ray'
+        };
+        
+        const targetMap = {
+          'clash': 'clash',
+          'surge': 'surge',
+          'shadowrocket': 'shadowrocket',
+          'quantumult': 'quanx',
+          'sing-box': 'singbox',
+          'v2ray': 'v2ray'
+        };
+        
+        finalUrl = apiBaseUrl + '?target=' + targetMap[client] + '&url=' + encodeURIComponent(originalUrl);
+        clientName = clientNames[client] || client;
+      }
+      
+      copyToClipboard(finalUrl);
+    }
+    
+    async function deleteUser(uuid) {
+      const confirmed = await showConfirm('确定要删除该用户吗？\n\n⚠️ 此操作不可恢复！', '删除用户');
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuids: uuid })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('用户已删除', 'success');
+          loadAllUsers();
+        } else {
+          showAlert('删除失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('删除失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 反代IP功能 ==========
+    let currentProxyIPs = [];
+    
+    async function loadProxyIPSettings() {
+      try {
+        // 加载系统设置
+        const settingsResponse = await fetch('/api/admin/getSystemSettings');
+        const settingsData = await settingsResponse.json();
+        
+        if (settingsData.success) {
+          const settings = settingsData.settings;
+          document.getElementById('sub-url').value = settings.subUrl || '';
+          document.getElementById('website-url').value = settings.websiteUrl || '';
+        }
+        
+        // 加载反代IP列表
+        const response = await fetch('/api/admin/proxy-ips');
+        if (!response.ok) throw new Error('Failed to fetch proxy IPs');
+        
+        const data = await response.json();
+        currentProxyIPs = data.proxyIPs || [];
+        
+        renderProxyIPList();
+      } catch (error) {
+        console.error('加载反代IP设置失败:', error);
+        showAlert('加载失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderProxyIPList() {
+      const listContainer = document.getElementById('proxy-ips-list');
+      document.getElementById('proxy-ips-count').textContent = '已配置 ' + currentProxyIPs.length + ' 个';
+      
+      if (currentProxyIPs.length === 0) {
+        listContainer.innerHTML = '<div class="divide-y divide-slate-200 dark:divide-zinc-800"><div class="p-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2">cloud_off</span><p class="text-sm">暂无反代 IP</p></div></div>';
+        return;
+      }
+      
+      let html = '<div class="divide-y divide-slate-200 dark:divide-zinc-800">';
+      currentProxyIPs.forEach((ip, index) => {
+        html += '<div class="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-zinc-900/50 transition-colors">' +
+          '<div class="flex items-center gap-4">' +
+            '<span class="material-symbols-outlined text-slate-400 dark:text-zinc-600 cursor-move">drag_indicator</span>' +
+            '<code class="text-sm font-mono text-slate-700 dark:text-zinc-300">' + ip + '</code>' +
+          '</div>' +
+          '<button onclick="deleteProxyIP(' + index + ')" class="text-slate-400 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors">' +
+            '<span class="material-symbols-outlined">delete</span>' +
+          '</button>' +
+        '</div>';
+      });
+      html += '</div>';
+      listContainer.innerHTML = html;
+    }
+    
+    function batchAddProxyIPs() {
+      const input = document.getElementById('proxy-ips-batch-input').value;
+      const newIPs = input.split('\\n').map(line => line.trim()).filter(line => line);
+      
+      if (newIPs.length === 0) {
+        showAlert('请输入要添加的反代 IP', 'warning');
+        return;
+      }
+      
+      // 去重并添加
+      newIPs.forEach(ip => {
+        if (!currentProxyIPs.includes(ip)) {
+          currentProxyIPs.push(ip);
+        }
+      });
+      
+      document.getElementById('proxy-ips-batch-input').value = '';
+      renderProxyIPList();
+      showAlert('已添加 ' + newIPs.length + ' 个反代 IP', 'success');
+    }
+    
+    async function deleteProxyIP(index) {
+      const confirmed = await showConfirm('确定要删除该反代 IP 吗？', '删除反代IP');
+      if (!confirmed) return;
+      currentProxyIPs.splice(index, 1);
+      renderProxyIPList();
+    }
+    
+    async function saveAllProxyIPSettings() {
+      try {
+        const subUrl = document.getElementById('sub-url').value.trim();
+        const websiteUrl = document.getElementById('website-url').value.trim();
+        
+        // 保存系统设置
+        const settingsResponse = await fetch('/api/admin/saveSettings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            subUrl, 
+            websiteUrl,
+            proxyIP: currentProxyIPs.join('\\n')
+          })
+        });
+        
+        const settingsResult = await settingsResponse.json();
+        if (!settingsResult.success) {
+          throw new Error(settingsResult.error || '保存系统设置失败');
+        }
+        
+        // 保存反代IP列表
+        const proxyResponse = await fetch('/api/admin/proxy-ips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proxyIPs: currentProxyIPs })
+        });
+        
+        const proxyResult = await proxyResponse.json();
+        
+        if (proxyResult.success) {
+          showAlert('保存成功\n\n' + 
+            '订阅地址: ' + (subUrl || '未设置') + '\\n' +
+            '官网地址: ' + (websiteUrl || '未设置') + '\\n' +
+            '反代 IP: ' + currentProxyIPs.length + ' 个', 'success');
+        } else {
+          showAlert('保存失败: ' + (proxyResult.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('保存失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 套餐管理功能 ==========
+    let allPlans = [];
+    
+    async function loadAllPlans() {
+      try {
+        const response = await fetch('/api/admin/plans');
+        if (!response.ok) throw new Error('Failed to fetch plans');
+        
+        const data = await response.json();
+        if (data.success) {
+          allPlans = data.plans || [];
+          renderPlansList();
+        } else {
+          showAlert('加载套餐失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        console.error('加载套餐失败:', error);
+        showAlert('加载套餐失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderPlansList() {
+      const tbody = document.getElementById('plans-list');
+      const countDiv = document.getElementById('plans-count');
+      
+      if (!allPlans || allPlans.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400 dark:text-slate-600"><span class="material-symbols-outlined text-4xl mb-2 block">inventory_2</span><p class="text-sm">暂无套餐</p></td></tr>';
+        countDiv.textContent = '共 0 个套餐项目';
+        return;
+      }
+      
+      let html = '';
+      allPlans.forEach(plan => {
+        const statusClass = plan.enabled 
+          ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+          : 'bg-slate-50 dark:bg-slate-950 text-slate-400 border border-slate-200 dark:border-slate-800';
+        const statusText = plan.enabled ? '已上架' : '已下架';
+        const toggleIcon = plan.enabled ? 'toggle_on' : 'toggle_off';
+        const rowOpacity = plan.enabled ? '' : ' opacity-60';
+        
+        html += '<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors' + rowOpacity + '" data-plan-name="' + plan.name.toLowerCase() + '">' +
+          '<td class="px-6 py-4 font-medium">' + plan.name + '</td>' +
+          '<td class="px-6 py-4 text-slate-500">' + plan.duration_days + '天</td>' +
+          '<td class="px-6 py-4">¥' + parseFloat(plan.price).toFixed(2) + '</td>' +
+          '<td class="px-6 py-4 text-slate-500 max-w-xs truncate">' + (plan.description || '-') + '</td>' +
+          '<td class="px-6 py-4">' +
+            '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ' + statusClass + '">' +
+              statusText +
+            '</span>' +
+          '</td>' +
+          '<td class="px-6 py-4 text-right">' +
+            '<div class="flex items-center justify-end gap-1">' +
+              '<button onclick="togglePlanStatus(' + plan.id + ')" class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors" title="切换状态">' +
+                '<span class="material-symbols-outlined text-[20px]">' + toggleIcon + '</span>' +
+              '</button>' +
+              '<button onclick="editPlan(' + plan.id + ')" class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors" title="编辑">' +
+                '<span class="material-symbols-outlined text-[20px]">edit_note</span>' +
+              '</button>' +
+              '<button onclick="deletePlanConfirm(' + plan.id + ')" class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-red-500 transition-colors" title="删除">' +
+                '<span class="material-symbols-outlined text-[20px]">delete_outline</span>' +
+              '</button>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      });
+      
+      tbody.innerHTML = html;
+      countDiv.textContent = '共 ' + allPlans.length + ' 个套餐项目';
+    }
+    
+    function filterPlans() {
+      const searchTerm = document.getElementById('plan-search').value.toLowerCase();
+      const rows = document.querySelectorAll('#plans-list tr[data-plan-name]');
+      
+      rows.forEach(row => {
+        const planName = row.getAttribute('data-plan-name');
+        if (planName.includes(searchTerm)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+    
+    async function addNewPlan() {
+      const name = document.getElementById('plan-name').value.trim();
+      const duration = parseInt(document.getElementById('plan-duration').value);
+      const price = parseFloat(document.getElementById('plan-price').value);
+      const description = document.getElementById('plan-description').value.trim();
+      
+      if (!name) {
+        showAlert('请输入套餐名称', 'warning');
+        return;
+      }
+      
+      if (!duration || duration <= 0) {
+        showAlert('请输入有效的时长', 'warning');
+        return;
+      }
+      
+      if (isNaN(price) || price < 0) {
+        showAlert('请输入有效的价格', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/plans/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            description,
+            duration_days: duration,
+            price
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('套餐添加成功', 'success');
+          document.getElementById('add-plan-form').reset();
+          document.getElementById('plan-duration').value = 30;
+          document.getElementById('plan-price').value = 0;
+          loadAllPlans();
+        } else {
+          showAlert('添加失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('添加失败: ' + error.message, 'error');
+      }
+    }
+    
+    function editPlan(planId) {
+      const plan = allPlans.find(p => p.id === planId);
+      if (!plan) return;
+      
+      const bodyHtml = '<div class="space-y-4">' +
+        '<input type="hidden" id="edit-plan-id" value="' + planId + '">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">套餐名称</label>' +
+          '<input id="edit-plan-name" type="text" value="' + plan.name + '" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+        '</div>' +
+        '<div class="grid grid-cols-2 gap-4">' +
+          '<div class="space-y-2">' +
+            '<label class="text-sm font-medium">时长 (天)</label>' +
+            '<input id="edit-plan-duration" type="number" min="1" value="' + plan.duration_days + '" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+          '</div>' +
+          '<div class="space-y-2">' +
+            '<label class="text-sm font-medium">价格 (¥)</label>' +
+            '<input id="edit-plan-price" type="number" step="0.01" min="0" value="' + plan.price + '" class="w-full h-9 px-3 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary">' +
+          '</div>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium">套餐描述</label>' +
+          '<textarea id="edit-plan-description" rows="3" class="w-full px-3 py-2 rounded-md border border-border-light dark:border-border-dark bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none">' + (plan.description || '') + '</textarea>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex justify-end gap-2 mt-6">' +
+        '<button onclick="closeModal()" class="px-4 py-2 text-sm font-medium border border-border-light dark:border-border-dark rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900">取消</button>' +
+        '<button onclick="savePlanEdit()" class="px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:opacity-90">保存</button>' +
+      '</div>';
+      
+      openModal('编辑套餐', bodyHtml);
+    }
+    
+    async function savePlanEdit() {
+      const id = parseInt(document.getElementById('edit-plan-id').value);
+      const name = document.getElementById('edit-plan-name').value.trim();
+      const duration = parseInt(document.getElementById('edit-plan-duration').value);
+      const price = parseFloat(document.getElementById('edit-plan-price').value);
+      const description = document.getElementById('edit-plan-description').value.trim();
+      
+      if (!name) {
+        showAlert('请输入套餐名称', 'warning');
+        return;
+      }
+      
+      if (!duration || duration <= 0) {
+        showAlert('请输入有效的时长', 'warning');
+        return;
+      }
+      
+      if (isNaN(price) || price < 0) {
+        showAlert('请输入有效的价格', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/plans/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name,
+            description,
+            duration_days: duration,
+            price
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('套餐更新成功', 'success');
+          closeModal();
+          loadAllPlans();
+        } else {
+          showAlert('更新失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('更新失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function togglePlanStatus(planId) {
+      try {
+        const response = await fetch('/api/admin/plans/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: planId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('状态已更新', 'success');
+          loadAllPlans();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function deletePlanConfirm(planId) {
+      const plan = allPlans.find(p => p.id === planId);
+      if (!plan) return;
+      
+      const confirmed = await showConfirm(
+        '确定要删除套餐 "' + plan.name + '" 吗？\n\n⚠️ 此操作不可恢复！',
+        '删除套餐'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/plans/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: planId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('套餐已删除', 'success');
+          loadAllPlans();
+        } else {
+          showAlert('删除失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('删除失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 订单管理功能 ==========
+    let allOrders = [];
+    
+    async function loadAllOrders() {
+      try {
+        const status = document.getElementById('order-status-filter').value;
+        const response = await fetch('/api/admin/orders?status=' + status);
+        if (!response.ok) throw new Error('Failed to fetch orders');
+        
+        const data = await response.json();
+        if (data.success) {
+          allOrders = data.orders || [];
+          renderOrdersList();
+        } else {
+          showAlert('加载订单失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        console.error('加载订单失败:', error);
+        showAlert('加载订单失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderOrdersList() {
+      const tbody = document.getElementById('orders-list');
+      const countSpan = document.getElementById('orders-count');
+      
+      if (!allOrders || allOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-slate-400 dark:text-slate-600"><span class="material-symbols-outlined text-4xl mb-2 block">receipt_long</span><p class="text-sm">暂无订单</p></td></tr>';
+        countSpan.textContent = '共 0 条订单';
+        return;
+      }
+      
+      let html = '';
+      allOrders.forEach(order => {
+        const statusConfig = getOrderStatusConfig(order.status);
+        const canApprove = order.status === 'pending';
+        const createdTime = order.created_at ? new Date(order.created_at).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).replace(/\\//g, '/') : '-';
+        
+        html += '<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors" data-order-id="' + order.id + '">' +
+          '<td class="px-6 py-4">' +
+            '<input class="order-checkbox rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary" type="checkbox" value="' + order.id + '"/>' +
+          '</td>' +
+          '<td class="px-6 py-4 text-sm font-mono text-slate-500">#' + order.id + '</td>' +
+          '<td class="px-6 py-4 text-sm font-medium">' + (order.username || order.uuid.substring(0, 8)) + '</td>' +
+          '<td class="px-6 py-4 text-sm">' + (order.plan_name || '-') + ' (' + order.duration_days + '天)</td>' +
+          '<td class="px-6 py-4 text-sm font-medium">¥' + parseFloat(order.price || 0).toFixed(2) + '</td>' +
+          '<td class="px-6 py-4 text-sm text-slate-500">' + createdTime + '</td>' +
+          '<td class="px-6 py-4 text-sm">' +
+            '<div class="flex items-center gap-1.5 ' + statusConfig.textColor + '">' +
+              '<span class="w-1.5 h-1.5 rounded-full ' + statusConfig.dotColor + '"></span>' +
+              statusConfig.text +
+            '</div>' +
+          '</td>' +
+          '<td class="px-6 py-4 text-right">';
+        
+        if (canApprove) {
+          html += '<div class="flex justify-end gap-3">' +
+            '<button onclick="approveOrderConfirm(' + order.id + ')" class="text-xs font-semibold text-slate-900 dark:text-white hover:underline">通过</button>' +
+            '<button onclick="rejectOrderConfirm(' + order.id + ')" class="text-xs font-semibold text-red-500 hover:underline">拒绝</button>' +
+          '</div>';
+        } else {
+          html += '<button onclick="viewOrderDetail(' + order.id + ')" class="text-slate-400 hover:text-primary transition-colors">' +
+            '<span class="material-symbols-outlined">more_horiz</span>' +
+          '</button>';
+        }
+        
+        html += '</td></tr>';
+      });
+      
+      tbody.innerHTML = html;
+      countSpan.textContent = '共 ' + allOrders.length + ' 条订单';
+    }
+    
+    function getOrderStatusConfig(status) {
+      const configs = {
+        'pending': {
+          text: '待审核',
+          textColor: 'text-blue-500 dark:text-blue-400',
+          dotColor: 'bg-blue-500'
+        },
+        'approved': {
+          text: '已通过',
+          textColor: 'text-emerald-600 dark:text-emerald-400',
+          dotColor: 'bg-emerald-500'
+        },
+        'rejected': {
+          text: '已拒绝',
+          textColor: 'text-slate-500 dark:text-slate-400',
+          dotColor: 'bg-slate-400'
+        },
+        'expired': {
+          text: '已过期',
+          textColor: 'text-orange-500 dark:text-orange-400',
+          dotColor: 'bg-orange-500'
+        }
+      };
+      return configs[status] || configs['pending'];
+    }
+    
+    function filterOrders() {
+      const searchTerm = document.getElementById('order-search').value.toLowerCase();
+      const rows = document.querySelectorAll('#orders-list tr[data-order-id]');
+      
+      let visibleCount = 0;
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      
+      document.getElementById('orders-count').textContent = '共 ' + visibleCount + ' 条订单';
+    }
+    
+    function toggleAllOrderChecks() {
+      const checked = document.getElementById('order-check-all').checked;
+      document.querySelectorAll('.order-checkbox').forEach(cb => {
+        cb.checked = checked;
+      });
+    }
+    
+    async function approveOrderConfirm(orderId) {
+      const order = allOrders.find(o => o.id === orderId);
+      if (!order) return;
+      
+      const confirmed = await showConfirm(
+        '确定要通过订单 #' + orderId + ' 吗？\n\n用户: ' + (order.username || order.uuid.substring(0, 13)) + '\n套餐: ' + order.plan_name + ' (' + order.duration_days + '天)\n金额: ¥' + order.price,
+        '通过订单'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/orders/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: orderId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('订单已通过，用户套餐已更新', 'success');
+          loadAllOrders();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function rejectOrderConfirm(orderId) {
+      const order = allOrders.find(o => o.id === orderId);
+      if (!order) return;
+      
+      const confirmed = await showConfirm(
+        '确定要拒绝订单 #' + orderId + ' 吗？\n\n⚠️ 此操作不可恢复！',
+        '拒绝订单'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/orders/reject', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: orderId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('订单已拒绝', 'success');
+          loadAllOrders();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function batchApproveOrders() {
+      const checked = Array.from(document.querySelectorAll('.order-checkbox:checked'));
+      if (checked.length === 0) {
+        showAlert('请选择要通过的订单', 'warning');
+        return;
+      }
+      
+      const confirmed = await showConfirm(
+        '确定要批量通过选中的 ' + checked.length + ' 个订单吗？',
+        '批量通过'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const cb of checked) {
+          const orderId = parseInt(cb.value);
+          const response = await fetch('/api/admin/orders/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: orderId })
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
           }
         }
-        newAutoDomains.push(...merged.slice(0,5));
-      }else{
-        newAutoDomains.push(...oldIPs.slice(0,5));
+        
+        showAlert('批量操作完成\\n成功: ' + successCount + ' 个\\n失败: ' + failCount + ' 个', successCount > 0 ? 'success' : 'error');
+        loadAllOrders();
+        document.getElementById('order-check-all').checked = false;
+      } catch (error) {
+        showAlert('批量操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function batchRejectOrders() {
+      const checked = Array.from(document.querySelectorAll('.order-checkbox:checked'));
+      if (checked.length === 0) {
+        showAlert('请选择要拒绝的订单', 'warning');
+        return;
+      }
+      
+      const confirmed = await showConfirm(
+        '确定要批量拒绝选中的 ' + checked.length + ' 个订单吗？\n\n⚠️ 此操作不可恢复！',
+        '批量拒绝'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const cb of checked) {
+          const orderId = parseInt(cb.value);
+          const response = await fetch('/api/admin/orders/reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: orderId })
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+        
+        showAlert('批量操作完成\\n成功: ' + successCount + ' 个\\n失败: ' + failCount + ' 个', successCount > 0 ? 'success' : 'error');
+        loadAllOrders();
+        document.getElementById('order-check-all').checked = false;
+      } catch (error) {
+        showAlert('批量操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    function viewOrderDetail(orderId) {
+      const order = allOrders.find(o => o.id === orderId);
+      if (!order) return;
+      
+      const statusConfig = getOrderStatusConfig(order.status);
+      const createdTime = order.created_at ? new Date(order.created_at).toLocaleString('zh-CN') : '-';
+      const processedTime = order.processed_at ? new Date(order.processed_at).toLocaleString('zh-CN') : '-';
+      
+      const bodyHtml = '<div class="space-y-4">' +
+        '<div class="grid grid-cols-2 gap-4">' +
+          '<div class="space-y-2">' +
+            '<label class="text-xs font-medium text-slate-500">订单ID</label>' +
+            '<div class="text-sm font-mono">#' + order.id + '</div>' +
+          '</div>' +
+          '<div class="space-y-2">' +
+            '<label class="text-xs font-medium text-slate-500">状态</label>' +
+            '<div class="flex items-center gap-1.5 ' + statusConfig.textColor + ' text-sm">' +
+              '<span class="w-1.5 h-1.5 rounded-full ' + statusConfig.dotColor + '"></span>' +
+              statusConfig.text +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-xs font-medium text-slate-500">用户UUID</label>' +
+          '<div class="text-sm font-mono">' + order.uuid + '</div>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-xs font-medium text-slate-500">套餐</label>' +
+          '<div class="text-sm">' + (order.plan_name || '-') + ' (' + order.duration_days + '天)</div>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-xs font-medium text-slate-500">金额</label>' +
+          '<div class="text-sm font-medium">¥' + parseFloat(order.price || 0).toFixed(2) + '</div>' +
+        '</div>' +
+        '<div class="grid grid-cols-2 gap-4">' +
+          '<div class="space-y-2">' +
+            '<label class="text-xs font-medium text-slate-500">创建时间</label>' +
+            '<div class="text-sm text-slate-600 dark:text-slate-400">' + createdTime + '</div>' +
+          '</div>' +
+          '<div class="space-y-2">' +
+            '<label class="text-xs font-medium text-slate-500">处理时间</label>' +
+            '<div class="text-sm text-slate-600 dark:text-slate-400">' + processedTime + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex justify-end gap-2 mt-6">' +
+        '<button onclick="closeModal()" class="px-4 py-2 text-sm font-medium border border-border-light dark:border-border-dark rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900">关闭</button>' +
+      '</div>';
+      
+      openModal('订单详情', bodyHtml);
+    }
+    
+    async function exportOrders() {
+      try {
+        showAlert('正在导出订单数据...', 'info');
+        
+        const status = document.getElementById('order-status-filter').value;
+        const response = await fetch('/api/admin/orders?status=' + status);
+        const data = await response.json();
+        
+        if (data.success) {
+          const orders = data.orders || [];
+          const csvContent = 'data:text/csv;charset=utf-8,' +
+            'ID,用户UUID,用户名,套餐名称,时长(天),金额,状态,创建时间,处理时间\\n' +
+            orders.map(o => 
+              o.id + ',' +
+              o.uuid + ',' +
+              (o.username || '') + ',' +
+              (o.plan_name || '') + ',' +
+              o.duration_days + ',' +
+              o.price + ',' +
+              o.status + ',' +
+              (o.created_at ? new Date(o.created_at).toLocaleString('zh-CN') : '') + ',' +
+              (o.processed_at ? new Date(o.processed_at).toLocaleString('zh-CN') : '')
+            ).join('\\n');
+          
+          const encodedUri = encodeURI(csvContent);
+          const link = document.createElement('a');
+          link.setAttribute('href', encodedUri);
+          link.setAttribute('download', 'orders_' + Date.now() + '.csv');
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          showAlert('导出成功', 'success');
+        } else {
+          showAlert('导出失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('导出失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 公告管理功能 ==========
+    let allAnnouncements = [];
+    
+    async function loadAllAnnouncements() {
+      try {
+        const response = await fetch('/api/admin/announcements');
+        if (!response.ok) throw new Error('Failed to fetch announcements');
+        
+        const data = await response.json();
+        if (data.success) {
+          allAnnouncements = data.announcements || [];
+          renderAnnouncementsList();
+        } else {
+          showAlert('加载公告失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        console.error('加载公告失败:', error);
+        showAlert('加载公告失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderAnnouncementsList() {
+      const container = document.getElementById('announcements-list');
+      
+      if (!allAnnouncements || allAnnouncements.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50">' +
+          '<span class="material-symbols-outlined text-4xl mb-2 block">campaign</span>' +
+          '<p class="text-sm">暂无公告</p>' +
+          '<button onclick="openAddAnnouncementModal()" class="mt-4 text-sm text-primary hover:underline">添加第一条公告</button>' +
+        '</div>';
+        return;
+      }
+      
+      let html = '';
+      allAnnouncements.forEach(announcement => {
+        const createdTime = announcement.created_at ? new Date(announcement.created_at).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).replace(/\\//g, '-') : '-';
+        
+        const statusClass = announcement.enabled 
+          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
+        const statusText = announcement.enabled ? '已启用' : '已禁用';
+        
+        html += '<div class="border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900/50 overflow-hidden hover:shadow-md transition-shadow">' +
+          '<div class="p-6">' +
+            '<div class="flex items-start justify-between mb-4">' +
+              '<div class="flex-1">' +
+                '<div class="flex items-center gap-3 mb-2">' +
+                  '<h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">' + announcement.title + '</h3>' +
+                  '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + statusClass + '">' + statusText + '</span>' +
+                '</div>' +
+                '<p class="text-xs text-slate-500 dark:text-slate-400">创建时间: ' + createdTime + '</p>' +
+              '</div>' +
+              '<div class="flex items-center gap-2">' +
+                '<button onclick="editAnnouncement(' + announcement.id + ')" class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors" title="编辑">' +
+                  '<span class="material-symbols-outlined text-[20px]">edit_note</span>' +
+                '</button>' +
+                '<button onclick="toggleAnnouncementStatus(' + announcement.id + ')" class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors" title="切换状态">' +
+                  '<span class="material-symbols-outlined text-[20px]">' + (announcement.enabled ? 'toggle_on' : 'toggle_off') + '</span>' +
+                '</button>' +
+                '<button onclick="deleteAnnouncementConfirm(' + announcement.id + ')" class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-red-500 transition-colors" title="删除">' +
+                  '<span class="material-symbols-outlined text-[20px]">delete_outline</span>' +
+                '</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="bg-slate-50 dark:bg-slate-800/50 rounded-md p-4 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">' +
+              announcement.content +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    function openAddAnnouncementModal() {
+      const bodyHtml = '<div class="space-y-6">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</label>' +
+          '<input id="add-announcement-title" type="text" class="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:ring-offset-slate-950" placeholder="请输入公告标题"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-slate-700 dark:text-slate-300">公告内容</label>' +
+          '<textarea id="add-announcement-content" rows="8" class="flex min-h-[160px] w-full rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:ring-offset-slate-950 resize-none leading-relaxed" placeholder="请输入公告内容..."></textarea>' +
+        '</div>' +
+        '<div class="flex items-center space-x-2">' +
+          '<input checked id="add-announcement-enabled" type="checkbox" class="rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary cursor-pointer"/>' +
+          '<label for="add-announcement-enabled" class="text-sm font-medium cursor-pointer select-none text-slate-700 dark:text-slate-300">启用此公告</label>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex items-center justify-end space-x-2 mt-6">' +
+        '<button onclick="closeModal()" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 h-10 px-4 py-2 transition-colors">取消</button>' +
+        '<button onclick="saveNewAnnouncement()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-white hover:bg-slate-800 h-10 px-4 py-2 transition-colors">保存</button>' +
+      '</div>';
+      
+      openModal('添加公告', bodyHtml);
+    }
+    
+    async function saveNewAnnouncement() {
+      const title = document.getElementById('add-announcement-title').value.trim();
+      const content = document.getElementById('add-announcement-content').value.trim();
+      const enabled = document.getElementById('add-announcement-enabled').checked;
+      
+      if (!title) {
+        showAlert('请输入公告标题', 'warning');
+        return;
+      }
+      
+      if (!content) {
+        showAlert('请输入公告内容', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/announcements/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('公告添加成功', 'success');
+          closeModal();
+          loadAllAnnouncements();
+        } else {
+          showAlert('添加失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('添加失败: ' + error.message, 'error');
+      }
+    }
+    
+    function editAnnouncement(announcementId) {
+      const announcement = allAnnouncements.find(a => a.id === announcementId);
+      if (!announcement) return;
+      
+      const bodyHtml = '<div class="space-y-6">' +
+        '<input type="hidden" id="edit-announcement-id" value="' + announcementId + '">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-slate-700 dark:text-slate-300">公告标题</label>' +
+          '<input id="edit-announcement-title" type="text" value="' + announcement.title + '" class="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:ring-offset-slate-950"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-slate-700 dark:text-slate-300">公告内容</label>' +
+          '<textarea id="edit-announcement-content" rows="8" class="flex min-h-[160px] w-full rounded-md border border-slate-200 dark:border-slate-800 bg-transparent px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:ring-offset-slate-950 resize-none leading-relaxed">' + announcement.content + '</textarea>' +
+        '</div>' +
+        '<div class="flex items-center space-x-2">' +
+          '<input ' + (announcement.enabled ? 'checked' : '') + ' id="edit-announcement-enabled" type="checkbox" class="rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary cursor-pointer"/>' +
+          '<label for="edit-announcement-enabled" class="text-sm font-medium cursor-pointer select-none text-slate-700 dark:text-slate-300">启用此公告</label>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex items-center justify-end space-x-2 mt-6">' +
+        '<button onclick="closeModal()" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 h-10 px-4 py-2 transition-colors">取消</button>' +
+        '<button onclick="saveAnnouncementEdit()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-white hover:bg-slate-800 h-10 px-4 py-2 transition-colors">保存</button>' +
+      '</div>';
+      
+      openModal('编辑公告', bodyHtml);
+    }
+    
+    async function saveAnnouncementEdit() {
+      const id = parseInt(document.getElementById('edit-announcement-id').value);
+      const title = document.getElementById('edit-announcement-title').value.trim();
+      const content = document.getElementById('edit-announcement-content').value.trim();
+      const enabled = document.getElementById('edit-announcement-enabled').checked;
+      
+      if (!title) {
+        showAlert('请输入公告标题', 'warning');
+        return;
+      }
+      
+      if (!content) {
+        showAlert('请输入公告内容', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/announcements/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, title, content, enabled })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('公告更新成功', 'success');
+          closeModal();
+          loadAllAnnouncements();
+        } else {
+          showAlert('更新失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('更新失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function toggleAnnouncementStatus(announcementId) {
+      const announcement = allAnnouncements.find(a => a.id === announcementId);
+      if (!announcement) return;
+      
+      try {
+        const response = await fetch('/api/admin/announcements/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            id: announcementId, 
+            title: announcement.title,
+            content: announcement.content,
+            enabled: !announcement.enabled
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('状态已更新', 'success');
+          loadAllAnnouncements();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function deleteAnnouncementConfirm(announcementId) {
+      const announcement = allAnnouncements.find(a => a.id === announcementId);
+      if (!announcement) return;
+      
+      const confirmed = await showConfirm(
+        '确定要删除公告 "' + announcement.title + '" 吗？\n\n⚠️ 此操作不可恢复！',
+        '删除公告'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/announcements/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: announcementId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('公告已删除', 'success');
+          loadAllAnnouncements();
+        } else {
+          showAlert('删除失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('删除失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 支付渠道管理功能 ==========
+    let allPaymentChannels = [];
+    
+    async function loadAllPaymentChannels() {
+      try {
+        const response = await fetch('/api/admin/payment-channels');
+        if (!response.ok) throw new Error('Failed to fetch payment channels');
+        
+        const data = await response.json();
+        if (data.success) {
+          allPaymentChannels = data.channels || [];
+          renderPaymentChannelsList();
+        } else {
+          showAlert('加载支付渠道失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        console.error('加载支付渠道失败:', error);
+        showAlert('加载支付渠道失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderPaymentChannelsList() {
+      const container = document.getElementById('payment-channels-list');
+      
+      if (!allPaymentChannels || allPaymentChannels.length === 0) {
+        container.innerHTML = '<div class="col-span-2 text-center py-12 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50">' +
+          '<span class="material-symbols-outlined text-4xl mb-2 block">payments</span>' +
+          '<p class="text-sm">暂无支付渠道</p>' +
+          '<button onclick="openAddPaymentChannelModal()" class="mt-4 text-sm text-primary hover:underline">添加第一个支付渠道</button>' +
+        '</div>';
+        return;
+      }
+      
+      let html = '';
+      allPaymentChannels.forEach(channel => {
+        const createdTime = channel.created_at ? new Date(channel.created_at).toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).replace(/\\//g, '-') : '-';
+        
+        const statusClass = channel.enabled 
+          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
+        const statusText = channel.enabled ? '已启用' : '已禁用';
+        
+        html += '<div class="border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-zinc-950 overflow-hidden hover:shadow-md transition-shadow">' +
+          '<div class="p-6">' +
+            '<div class="flex items-start justify-between mb-4">' +
+              '<div class="flex-1">' +
+                '<div class="flex items-center gap-3 mb-2">' +
+                  '<span class="material-symbols-outlined text-2xl text-primary">account_balance</span>' +
+                  '<div>' +
+                    '<h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">' + (channel.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</h3>' +
+                    '<p class="text-xs text-slate-500 dark:text-slate-400 font-mono">' + (channel.code || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + statusClass + '">' + statusText + '</span>' +
+            '</div>' +
+            '<div class="space-y-2 text-sm">' +
+              '<div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">' +
+                '<span class="material-symbols-outlined text-sm">link</span>' +
+                '<span class="font-mono text-xs truncate">' + (channel.api_url || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>' +
+              '</div>' +
+              '<div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">' +
+                '<span class="material-symbols-outlined text-sm">vpn_key</span>' +
+                '<span class="font-mono text-xs">••••••••••••••••</span>' +
+              '</div>' +
+              '<div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">' +
+                '<span class="material-symbols-outlined text-sm">schedule</span>' +
+                '<span class="text-xs">' + createdTime + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">' +
+              '<button onclick="editPaymentChannel(' + channel.id + ')" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors">' +
+                '<span class="material-symbols-outlined text-sm">edit</span>' +
+                '编辑' +
+              '</button>' +
+              '<button onclick="togglePaymentChannelStatus(' + channel.id + ')" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors">' +
+                '<span class="material-symbols-outlined text-sm">' + (channel.enabled ? 'toggle_on' : 'toggle_off') + '</span>' +
+                (channel.enabled ? '禁用' : '启用') +
+              '</button>' +
+              '<button onclick="deletePaymentChannelConfirm(' + channel.id + ')" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors">' +
+                '<span class="material-symbols-outlined text-sm">delete</span>' +
+                '删除' +
+              '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    function openAddPaymentChannelModal() {
+      const bodyHtml = '<div class="space-y-5">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">通道名称</label>' +
+          '<input id="add-channel-name" type="text" placeholder="例如: USDT-TRC20" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">通道代码</label>' +
+          '<input id="add-channel-code" type="text" placeholder="例如: usdt.trc20" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">API 地址</label>' +
+          '<input id="add-channel-api-url" type="url" placeholder="https://epusdt.example.com" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">API Token</label>' +
+          '<div class="relative">' +
+            '<input id="add-channel-api-token" type="password" placeholder="BEpusdt API 认证令牌" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 pr-10 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+            '<button type="button" onclick="togglePasswordVisibility(&quot;add-channel-api-token&quot;)" class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">' +
+              '<span class="material-symbols-outlined text-lg">visibility</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex items-center justify-end space-x-2 mt-6">' +
+        '<button onclick="closeModal()" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 h-10 px-4 py-2 text-zinc-950 dark:text-zinc-50 transition-colors">取消</button>' +
+        '<button onclick="saveNewPaymentChannel()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-white dark:bg-zinc-50 dark:text-zinc-950 hover:opacity-90 h-10 px-4 py-2 shadow transition-opacity">保存</button>' +
+      '</div>';
+      
+      openModal('添加支付渠道', bodyHtml);
+    }
+    
+    function togglePasswordVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+      } else {
+        input.type = 'password';
+      }
+    }
+    
+    async function saveNewPaymentChannel() {
+      const name = document.getElementById('add-channel-name').value.trim();
+      const code = document.getElementById('add-channel-code').value.trim();
+      const apiUrl = document.getElementById('add-channel-api-url').value.trim();
+      const apiToken = document.getElementById('add-channel-api-token').value.trim();
+      
+      if (!name) {
+        showAlert('请输入通道名称', 'warning');
+        return;
+      }
+      
+      if (!code) {
+        showAlert('请输入通道代码', 'warning');
+        return;
+      }
+      
+      if (!apiUrl) {
+        showAlert('请输入 API 地址', 'warning');
+        return;
+      }
+      
+      if (!apiToken) {
+        showAlert('请输入 API Token', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/payment-channels/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            code,
+            api_url: apiUrl,
+            api_token: apiToken
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('支付渠道添加成功', 'success');
+          closeModal();
+          loadAllPaymentChannels();
+        } else {
+          showAlert('添加失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('添加失败: ' + error.message, 'error');
+      }
+    }
+    
+    function editPaymentChannel(channelId) {
+      const channel = allPaymentChannels.find(c => c.id === channelId);
+      if (!channel) return;
+      
+      const bodyHtml = '<div class="space-y-5">' +
+        '<input type="hidden" id="edit-channel-id" value="' + channelId + '">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">通道名称</label>' +
+          '<input id="edit-channel-name" type="text" value="' + (channel.name || '').replace(/"/g, '&quot;') + '" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">通道代码</label>' +
+          '<input id="edit-channel-code" type="text" value="' + (channel.code || '').replace(/"/g, '&quot;') + '" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">API 地址</label>' +
+          '<input id="edit-channel-api-url" type="url" value="' + (channel.api_url || '').replace(/"/g, '&quot;') + '" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium text-zinc-950 dark:text-zinc-50">API Token <span class="text-xs text-zinc-500">(留空不修改)</span></label>' +
+          '<div class="relative">' +
+            '<input id="edit-channel-api-token" type="password" placeholder="留空则不修改" class="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 pr-10 text-sm placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300 dark:text-zinc-50"/>' +
+            '<button type="button" onclick="togglePasswordVisibility(&quot;edit-channel-api-token&quot;)" class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">' +
+              '<span class="material-symbols-outlined text-lg">visibility</span>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex items-center justify-end space-x-2 mt-6">' +
+        '<button onclick="closeModal()" class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 h-10 px-4 py-2 text-zinc-950 dark:text-zinc-50 transition-colors">取消</button>' +
+        '<button onclick="savePaymentChannelEdit()" class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-white dark:bg-zinc-50 dark:text-zinc-950 hover:opacity-90 h-10 px-4 py-2 shadow transition-opacity">保存更改</button>' +
+      '</div>';
+      
+      openModal('编辑支付渠道', bodyHtml);
+    }
+    
+    async function savePaymentChannelEdit() {
+      const id = parseInt(document.getElementById('edit-channel-id').value);
+      const name = document.getElementById('edit-channel-name').value.trim();
+      const code = document.getElementById('edit-channel-code').value.trim();
+      const apiUrl = document.getElementById('edit-channel-api-url').value.trim();
+      const apiToken = document.getElementById('edit-channel-api-token').value.trim();
+      
+      if (!name || !code || !apiUrl) {
+        showAlert('通道名称、代码和API地址不能为空', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/payment-channels/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name,
+            code,
+            api_url: apiUrl,
+            api_token: apiToken || undefined
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('支付渠道更新成功', 'success');
+          closeModal();
+          loadAllPaymentChannels();
+        } else {
+          showAlert('更新失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('更新失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function togglePaymentChannelStatus(channelId) {
+      try {
+        const response = await fetch('/api/admin/payment-channels/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: channelId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('状态已更新', 'success');
+          loadAllPaymentChannels();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function deletePaymentChannelConfirm(channelId) {
+      const channel = allPaymentChannels.find(c => c.id === channelId);
+      if (!channel) return;
+      
+      const confirmed = await showConfirm(
+        '确定要删除支付渠道 "' + channel.name + '" 吗？\n\n⚠️ 此操作不可恢复！',
+        '删除支付渠道'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/payment-channels/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: channelId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('支付渠道已删除', 'success');
+          loadAllPaymentChannels();
+        } else {
+          showAlert('删除失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('删除失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 邀请码管理功能 ==========
+    let allInviteCodes = [];
+    
+    async function loadAllInviteCodes() {
+      try {
+        const response = await fetch('/api/admin/invites');
+        if (!response.ok) throw new Error('Failed to fetch invite codes');
+        
+        const data = await response.json();
+        if (data.success) {
+          allInviteCodes = data.invites || [];
+          renderInviteCodesList();
+        } else {
+          showAlert('加载邀请码失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        console.error('加载邀请码失败:', error);
+        showAlert('加载邀请码失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderInviteCodesList() {
+      const tbody = document.getElementById('invites-list');
+      const countSpan = document.getElementById('invites-count');
+      
+      if (!allInviteCodes || allInviteCodes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-zinc-400 dark:text-zinc-600">' +
+          '<span class="material-symbols-outlined text-4xl mb-2 block">confirmation_number</span>' +
+          '<p class="text-sm">暂无邀请码</p>' +
+        '</td></tr>';
+        countSpan.textContent = '共 0 个邀请码';
+        return;
+      }
+      
+      let html = '';
+      allInviteCodes.forEach(invite => {
+        const usageText = invite.used_count + ' / ' + invite.max_uses;
+        const usagePercent = Math.round((invite.used_count / invite.max_uses) * 100);
+        const isExhausted = invite.used_count >= invite.max_uses;
+        
+        const statusClass = invite.enabled && !isExhausted
+          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400';
+        const statusText = !invite.enabled ? '已禁用' : (isExhausted ? '已用完' : '可使用');
+        
+        html += '<tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors">' +
+          '<td class="px-6 py-4">' +
+            '<div class="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">' + (invite.code || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' +
+          '</td>' +
+          '<td class="px-6 py-4">' +
+            '<div class="flex items-center gap-2">' +
+              '<div class="flex-1">' +
+                '<div class="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">' +
+                  '<div class="bg-black dark:bg-white h-2 transition-all" style="width: ' + usagePercent + '%"></div>' +
+                '</div>' +
+              '</div>' +
+              '<span class="text-xs text-zinc-500 font-mono">' + usageText + '</span>' +
+            '</div>' +
+          '</td>' +
+          '<td class="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">' + 
+            (invite.trial_days > 0 ? invite.trial_days + ' 天' : '-') +
+          '</td>' +
+          '<td class="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400 max-w-xs truncate" title="' + (invite.remark || '').replace(/"/g, '&quot;') + '">' + 
+            ((invite.remark || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')) +
+          '</td>' +
+          '<td class="px-6 py-4">' +
+            '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + statusClass + '">' +
+              statusText +
+            '</span>' +
+          '</td>' +
+          '<td class="px-6 py-4 text-right">' +
+            '<div class="flex items-center justify-end gap-1">' +
+              '<button onclick="copyInviteCode(this.dataset.code)" data-code="' + invite.code.replace(/"/g, '&quot;') + '" class="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-black dark:hover:text-white transition-colors" title="复制">' +
+                '<span class="material-symbols-outlined text-[18px]">content_copy</span>' +
+              '</button>' +
+              '<button onclick="editInviteCode(' + invite.id + ')" class="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-black dark:hover:text-white transition-colors" title="编辑">' +
+                '<span class="material-symbols-outlined text-[18px]">edit</span>' +
+              '</button>' +
+              '<button onclick="toggleInviteCodeStatus(' + invite.id + ')" class="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-black dark:hover:text-white transition-colors" title="切换状态">' +
+                '<span class="material-symbols-outlined text-[18px]">' + (invite.enabled ? 'toggle_on' : 'toggle_off') + '</span>' +
+              '</button>' +
+              '<button onclick="deleteInviteCodeConfirm(' + invite.id + ')" class="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-red-500 transition-colors" title="删除">' +
+                '<span class="material-symbols-outlined text-[18px]">delete</span>' +
+              '</button>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      });
+      
+      tbody.innerHTML = html;
+      countSpan.textContent = '共 ' + allInviteCodes.length + ' 个邀请码';
+    }
+    
+    async function generateInviteCode() {
+      const code = document.getElementById('gen-invite-code').value.trim();
+      const maxUses = parseInt(document.getElementById('gen-max-uses').value) || 1;
+      const trialDays = parseInt(document.getElementById('gen-trial-days').value) || 0;
+      const remark = document.getElementById('gen-remark').value.trim();
+      
+      if (maxUses < 1) {
+        showAlert('可使用次数至少为 1', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/invites/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: code || undefined,
+            max_uses: maxUses,
+            trial_days: trialDays,
+            remark: remark || ''
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('邀请码生成成功: ' + result.code, 'success');
+          document.getElementById('gen-invite-code').value = '';
+          document.getElementById('gen-max-uses').value = '1';
+          document.getElementById('gen-trial-days').value = '0';
+          document.getElementById('gen-remark').value = '';
+          loadAllInviteCodes();
+        } else {
+          showAlert('生成失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('生成失败: ' + error.message, 'error');
+      }
+    }
+    
+    function copyInviteCode(code) {
+      copyToClipboard(code);
+      showAlert('邀请码已复制: ' + code, 'success');
+    }
+    
+    function editInviteCode(inviteId) {
+      const invite = allInviteCodes.find(i => i.id === inviteId);
+      if (!invite) return;
+      
+      const bodyHtml = '<div class="px-6 py-4 space-y-5">' +
+        '<input type="hidden" id="edit-invite-id" value="' + inviteId + '">' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" for="edit-invite-code">邀请码</label>' +
+          '<input id="edit-invite-code" type="text" value="' + (invite.code || '').replace(/"/g, '&quot;') + '" class="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:placeholder:text-zinc-400 dark:focus-visible:ring-white"/>' +
+        '</div>' +
+        '<div class="grid grid-cols-2 gap-4">' +
+          '<div class="space-y-2">' +
+            '<label class="text-sm font-medium leading-none" for="edit-invite-max-uses">可使用次数</label>' +
+            '<input id="edit-invite-max-uses" type="number" min="1" value="' + invite.max_uses + '" class="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:focus-visible:ring-white"/>' +
+          '</div>' +
+          '<div class="space-y-2">' +
+            '<label class="text-sm font-medium leading-none" for="edit-invite-trial-days">赠送试用天数 <span class="text-[10px] text-zinc-400">(0表示不赠送)</span></label>' +
+            '<input id="edit-invite-trial-days" type="number" min="0" value="' + invite.trial_days + '" class="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:focus-visible:ring-white"/>' +
+          '</div>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<label class="text-sm font-medium leading-none" for="edit-invite-remark">备注</label>' +
+          '<input id="edit-invite-remark" type="text" placeholder="可选，例如：给某渠道" value="' + (invite.remark || '').replace(/"/g, '&quot;') + '" class="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:placeholder:text-zinc-400 dark:focus-visible:ring-white"/>' +
+        '</div>' +
+      '</div>' +
+      '<div class="px-6 py-6 mt-2 flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/50">' +
+        '<button onclick="closeModal()" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-zinc-200 bg-white hover:bg-zinc-100 hover:text-zinc-900 h-10 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:hover:bg-zinc-900 dark:hover:text-zinc-50">取消</button>' +
+        '<button onclick="saveInviteCodeEdit()" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-black text-zinc-50 hover:bg-black/90 h-10 px-6 py-2 dark:bg-white dark:text-black dark:hover:bg-white/90">保存修改</button>' +
+      '</div>';
+      
+      openModal('编辑邀请码', bodyHtml, 'max-w-md', '修改现有的邀请码配置信息。');
+    }
+    
+    async function saveInviteCodeEdit() {
+      const id = parseInt(document.getElementById('edit-invite-id').value);
+      const code = document.getElementById('edit-invite-code').value.trim();
+      const maxUses = parseInt(document.getElementById('edit-invite-max-uses').value);
+      const trialDays = parseInt(document.getElementById('edit-invite-trial-days').value);
+      const remark = document.getElementById('edit-invite-remark').value.trim();
+      
+      if (!code) {
+        showAlert('邀请码不能为空', 'warning');
+        return;
+      }
+      
+      if (maxUses < 1) {
+        showAlert('可使用次数至少为 1', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/admin/invites/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            code,
+            max_uses: maxUses,
+            trial_days: trialDays,
+            remark
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('邀请码更新成功', 'success');
+          closeModal();
+          loadAllInviteCodes();
+        } else {
+          showAlert('更新失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('更新失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function toggleInviteCodeStatus(inviteId) {
+      try {
+        const response = await fetch('/api/admin/invites/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: inviteId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('状态已更新', 'success');
+          loadAllInviteCodes();
+        } else {
+          showAlert('操作失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('操作失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function deleteInviteCodeConfirm(inviteId) {
+      const invite = allInviteCodes.find(i => i.id === inviteId);
+      if (!invite) return;
+      
+      const confirmed = await showConfirm(
+        '确定要删除邀请码 "' + invite.code + '" 吗？\n\n⚠️ 此操作不可恢复！',
+        '删除邀请码'
+      );
+      
+      if (!confirmed) return;
+      
+      try {
+        const response = await fetch('/api/admin/invites/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: inviteId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('邀请码已删除', 'success');
+          loadAllInviteCodes();
+        } else {
+          showAlert('删除失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('删除失败: ' + error.message, 'error');
+      }
+    }
+    
+    // ========== 优选域名功能 ==========
+    let currentBestDomains = [];
+    
+    async function loadBestDomains() {
+      try {
+        const response = await fetch('/api/admin/best-domains');
+        if (!response.ok) throw new Error('Failed to fetch best domains');
+        
+        const data = await response.json();
+        let domains = data.bestDomains || [];
+        
+        // 排序：IPv4在前，IPv6在后
+        domains.sort((a, b) => {
+          const isIPv6A = a.includes('[');
+          const isIPv6B = b.includes('[');
+          
+          if (isIPv6A && !isIPv6B) return 1;  // IPv6排后
+          if (!isIPv6A && isIPv6B) return -1; // IPv4排前
+          return 0;
+        });
+        
+        currentBestDomains = domains;
+        renderBestDomainsList();
+        updateNextSyncTime();
+      } catch (error) {
+        console.error('加载优选域名失败:', error);
+        showAlert('加载失败: ' + error.message, 'error');
+      }
+    }
+    
+    function renderBestDomainsList() {
+      const listContainer = document.getElementById('best-domains-list');
+      document.getElementById('best-domains-count').textContent = '共 ' + currentBestDomains.length + ' 个条目';
+      
+      if (currentBestDomains.length === 0) {
+        listContainer.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span><p class="text-sm">暂无优选域名</p></td></tr>';
+        return;
+      }
+      
+      let html = '';
+      currentBestDomains.forEach((domain, index) => {
+        html += '<tr class="group hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-colors" draggable="true" data-index="' + index + '" ondragstart="handleDragStart(event)" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragend="handleDragEnd(event)">' +
+          '<td class="px-4 py-3"><span class="material-symbols-outlined text-slate-300 dark:text-zinc-600 text-[18px] cursor-move">drag_indicator</span></td>' +
+          '<td class="px-4 py-3 font-mono text-slate-700 dark:text-zinc-300">' + domain + '</td>' +
+          '<td class="px-4 py-3"><span class="inline-block w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-600"></span></td>' +
+          '<td class="px-4 py-3 text-right">' +
+            '<button onclick="deleteBestDomain(' + index + ')" class="text-slate-400 hover:text-red-500 transition-colors">' +
+              '<span class="material-symbols-outlined text-[18px]">close</span>' +
+            '</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      listContainer.innerHTML = html;
+    }
+    
+    // 拖拽排序功能
+    let draggedIndex = null;
+    
+    function handleDragStart(e) {
+      draggedIndex = parseInt(e.currentTarget.getAttribute('data-index'));
+      e.currentTarget.style.opacity = '0.4';
+    }
+    
+    function handleDragOver(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+    
+    function handleDrop(e) {
+      if (e.stopPropagation) {
+        e.stopPropagation();
+      }
+      
+      const dropIndex = parseInt(e.currentTarget.getAttribute('data-index'));
+      
+      if (draggedIndex !== null && draggedIndex !== dropIndex) {
+        const draggedItem = currentBestDomains[draggedIndex];
+        currentBestDomains.splice(draggedIndex, 1);
+        currentBestDomains.splice(dropIndex, 0, draggedItem);
+        renderBestDomainsList();
+      }
+      
+      return false;
+    }
+    
+    function handleDragEnd(e) {
+      e.currentTarget.style.opacity = '1';
+      draggedIndex = null;
+    }
+    
+    function batchAddBestDomains() {
+      const input = document.getElementById('best-domains-batch-input').value;
+      const newDomains = input.split('\\n').map(line => line.trim()).filter(line => line);
+      
+      if (newDomains.length === 0) {
+        showAlert('请输入要添加的优选域名', 'warning');
+        return;
+      }
+      
+      // 去重并添加
+      newDomains.forEach(domain => {
+        if (!currentBestDomains.includes(domain)) {
+          currentBestDomains.push(domain);
+        }
+      });
+      
+      document.getElementById('best-domains-batch-input').value = '';
+      renderBestDomainsList();
+      showAlert('已添加 ' + newDomains.length + ' 个优选域名', 'success');
+    }
+    
+    async function deleteBestDomain(index) {
+      const confirmed = await showConfirm('确定要删除该优选域名吗？', '删除优选域名');
+      if (!confirmed) return;
+      currentBestDomains.splice(index, 1);
+      renderBestDomainsList();
+    }
+    
+    async function clearAllBestDomains() {
+      const confirmed = await showConfirm('确定要清空所有优选域名吗？\n\n⚠️ 此操作不可恢复！', '清空列表');
+      if (!confirmed) return;
+      currentBestDomains = [];
+      renderBestDomainsList();
+      showAlert('已清空优选域名列表', 'success');
+    }
+    
+    async function fetchIPv4BestDomains() {
+      const confirmed = await showConfirm('确定要从远程获取 IPv4 优选域名吗？\n\n⚠️ 这将替换当前列表！', '获取IPv4优选');
+      if (!confirmed) return;
+      
+      try {
+        showAlert('正在获取 IPv4 优选域名，请稍候...', 'info');
+        
+        // 这里可以对接后端的获取优选IP接口
+        // 暂时模拟数据
+        const mockDomains = [
+          'cf.twitter.now.cc',
+          'telecom.twitter.now.cc', 
+          'unicom.twitter.now.cc',
+          '104.19.238.63:443#移动 LHR',
+          '104.18.34.121:443#移动 LHR'
+        ];
+        
+        currentBestDomains = mockDomains;
+        renderBestDomainsList();
+        showAlert('已获取 ' + mockDomains.length + ' 个 IPv4 优选域名', 'success');
+      } catch (error) {
+        showAlert('获取失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function fetchIPv6BestDomains() {
+      const confirmed = await showConfirm('确定要从远程获取 IPv6 优选域名吗？\n\n⚠️ 这将替换当前列表！', '获取IPv6优选');
+      if (!confirmed) return;
+      
+      try {
+        showAlert('正在获取 IPv6 优选域名，请稍候...', 'info');
+        
+        // 这里可以对接后端的获取优选IP接口
+        // 暂时模拟数据
+        const mockDomains = [
+          '[2606:4700:7::a29f:8601]:443#美国',
+          '[2606:4700:7::a29f:8602]:443#欧洲'
+        ];
+        
+        currentBestDomains = mockDomains;
+        renderBestDomainsList();
+        showAlert('已获取 ' + mockDomains.length + ' 个 IPv6 优选域名', 'success');
+      } catch (error) {
+        showAlert('获取失败: ' + error.message, 'error');
+      }
+    }
+    
+    async function saveAllBestDomains() {
+      try {
+        const response = await fetch('/api/admin/best-domains', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bestDomains: currentBestDomains })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('保存成功\n\n共配置 ' + currentBestDomains.length + ' 个优选域名', 'success');
+        } else {
+          showAlert('保存失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        showAlert('保存失败: ' + error.message, 'error');
+      }
+    }
+    
+    let nextSyncSeconds = 15 * 60; // 15分钟 = 900秒
+    
+    function updateNextSyncTime() {
+      // 倒计时
+      nextSyncSeconds--;
+      if (nextSyncSeconds <= 0) {
+        nextSyncSeconds = 15 * 60; // 重置为15分钟
+      }
+      
+      const minutes = Math.floor(nextSyncSeconds / 60);
+      const seconds = nextSyncSeconds % 60;
+      const countdownStr = minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
+      
+      const countdownElem = document.getElementById('next-sync-countdown');
+      if (countdownElem) {
+        countdownElem.textContent = countdownStr;
+      }
+      
+      // 更新节点状态时间
+      const now = new Date();
+      const statusTimeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+      const statusTimeElem = document.getElementById('node-status-time');
+      if (statusTimeElem) {
+        statusTimeElem.textContent = '最后检测: ' + statusTimeStr;
+      }
+      
+      // 每秒更新一次
+      setTimeout(updateNextSyncTime, 1000);
+    }
+    
+    // 标签切换函数
+    function switchBestDomainsTab(tabName) {
+      // 切换标签激活状态
+      document.getElementById('tab-domain-list').classList.remove('active');
+      document.getElementById('tab-node-status').classList.remove('active');
+      document.getElementById('tab-' + tabName).classList.add('active');
+      
+      // 切换内容显示
+      document.getElementById('tab-content-domain-list').style.display = 'none';
+      document.getElementById('tab-content-node-status').style.display = 'none';
+      document.getElementById('tab-content-' + tabName).style.display = 'block';
+      
+      // 如果切换到节点状态，加载数据
+      if (tabName === 'node-status') {
+        loadNodeStatus();
+      }
+    }
+    
+    // 加载节点状态
+    async function loadNodeStatus() {
+      try {
+        if (!currentBestDomains || currentBestDomains.length === 0) {
+          renderNodeStatus([]);
+          return;
+        }
+        
+        // 解析优选域名列表
+        // 格式1: 域名 cf.twitter.now.cc
+        // 格式2: IPv4 104.18.34.78:443#v4移动 LHR
+        // 格式3: IPv6 [2606:4700:7::a29f:8601]:443#v6移动 MAA
+        const nodes = [];
+        for (let i = 0; i < currentBestDomains.length; i++) {
+          const domain = currentBestDomains[i];
+          const parsed = parseDomainEntry(domain);
+          if (parsed) {
+            // 测试延迟（模拟）
+            const latency = await testNodeLatency(parsed.address, parsed.port);
+            
+            // 构建节点地址显示
+            let nodeAddress;
+            if (parsed.isDomain) {
+              // 域名: cf.twitter.now.cc:443
+              nodeAddress = parsed.address + ':' + parsed.port;
+            } else if (parsed.address.includes(':')) {
+              // IPv6: [2606:4700:7::a29f:8601]:443
+              nodeAddress = '[' + parsed.address + ']:' + parsed.port;
+            } else {
+              // IPv4: 104.18.34.78:443
+              nodeAddress = parsed.address + ':' + parsed.port;
+            }
+            
+            nodes.push({
+              id: i + 1,
+              name: parsed.label,
+              node: nodeAddress,
+              latency: latency,
+              region: parsed.region || '-',
+              status: latency > 0 && latency < 3000 ? '在线' : '超时'
+            });
+          }
+        }
+        
+        renderNodeStatus(nodes);
+      } catch (error) {
+        console.error('加载节点状态失败:', error);
+      }
+    }
+    
+    // 解析域名条目
+    // 格式1: 104.18.34.78:443#v4移动 LHR (IPv4)
+    // 格式2: [2606:4700:7::a29f:8601]:443#v6移动 MAA (IPv6)
+    // 格式3: cf.twitter.now.cc (域名，无端口)
+    // 格式4: cf.twitter.now.cc:443 (域名，带端口)
+    function parseDomainEntry(entry) {
+      try {
+        // 检查是否有#分隔符
+        let addressPart, infoPart;
+        if (entry.includes('#')) {
+          const parts = entry.split('#');
+          addressPart = parts[0].trim();
+          infoPart = parts[1].trim();
+        } else {
+          // 没有#，说明是纯域名
+          addressPart = entry.trim();
+          infoPart = '';
+        }
+        
+        let address, port, isDomain = false;
+        
+        // 检查是否是IPv6格式（带方括号）
+        if (addressPart.startsWith('[')) {
+          // IPv6: [2606:4700:7::a29f:8601]:443
+          const ipv6Match = addressPart.match(/^\\[([^\\]]+)\\]:([0-9]+)$/);
+          if (!ipv6Match) return null;
+          address = ipv6Match[1]; // 2606:4700:7::a29f:8601
+          port = ipv6Match[2]; // 443
+          isDomain = false;
+        } else if (addressPart.match(/^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:/)) {
+          // IPv4: 104.18.34.78:443
+          const ipv4Match = addressPart.match(/^([0-9.]+):([0-9]+)$/);
+          if (!ipv4Match) return null;
+          address = ipv4Match[1]; // 104.18.34.78
+          port = ipv4Match[2]; // 443
+          isDomain = false;
+        } else {
+          // 域名: cf.twitter.now.cc 或 cf.twitter.now.cc:443
+          isDomain = true;
+          if (addressPart.includes(':')) {
+            const domainMatch = addressPart.match(/^([^:]+):([0-9]+)$/);
+            if (domainMatch) {
+              address = domainMatch[1]; // cf.twitter.now.cc
+              port = domainMatch[2]; // 443
+            } else {
+              address = addressPart;
+              port = '443'; // 默认端口
+            }
+          } else {
+            address = addressPart;
+            port = '443'; // 默认端口
+          }
+        }
+        
+        // 解析标签和地区
+        let label, region;
+        if (isDomain) {
+          // 域名节点：名称就是域名本身，地区为空
+          label = address;
+          region = '';
+        } else if (infoPart) {
+          // IP节点：解析标签和地区
+          // 格式: "v4移动 LHR" -> label: v4移动, region: LHR
+          const infoMatch = infoPart.match(/^(.+?)\s+([A-Z]{2,4})$/);
+          if (infoMatch) {
+            label = infoMatch[1]; // v4移动
+            region = infoMatch[2]; // LHR
+          } else {
+            label = infoPart; // 整个作为标签
+            region = '';
+          }
+        } else {
+          label = address;
+          region = '';
+        }
+        
+        return { address, port, label, region, isDomain };
+      } catch (e) {
+        console.error('解析域名条目失败:', entry, e);
+        return null;
+      }
+    }
+    
+    // 测试节点延迟（模拟）
+    async function testNodeLatency(ip, port) {
+      // 实际环境中可以ping或fetch测试
+      // 这里返回模拟延迟
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const randomLatency = Math.floor(Math.random() * 1500) + 500;
+          resolve(randomLatency);
+        }, 100);
+      });
+    }
+    
+    // 渲染节点状态列表
+    function renderNodeStatus(nodes) {
+      const tbody = document.getElementById('node-status-list');
+      
+      if (nodes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span><p class="text-sm">暂无节点状态数据</p></td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = nodes.map(node => {
+        const statusClass = node.status === '在线' 
+          ? 'border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400'
+          : 'border-red-200 dark:border-red-900 text-red-600 dark:text-red-400';
+        
+        return '<tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-colors">' +
+          '<td class="px-4 py-3 text-slate-500 dark:text-zinc-500 text-center">' + node.id + '</td>' +
+          '<td class="px-4 py-3 font-medium text-slate-900 dark:text-zinc-100">' + node.name + '</td>' +
+          '<td class="px-4 py-3 font-mono text-slate-600 dark:text-zinc-400">' + node.node + '</td>' +
+          '<td class="px-4 py-3 font-mono text-slate-600 dark:text-zinc-400">' + node.latency + 'ms</td>' +
+          '<td class="px-4 py-3 text-right">' +
+            '<span class="inline-flex items-center rounded-full border ' + statusClass + ' px-2 py-0.5 text-xs font-medium">' + node.status + '</span>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    // 获取仪表盘统计数据
+    async function fetchDashboardStats() {
+      try {
+        const response = await fetch('/api/admin/statistics');
+        if (!response.ok) throw new Error('Failed to fetch statistics');
+        
+        const stats = await response.json();
+        
+        document.getElementById('stat-total-users').textContent = stats.totalUsers || 0;
+        document.getElementById('stat-active-users').textContent = stats.activeUsers || 0;
+        document.getElementById('stat-config-nodes').textContent = stats.configNodes || 0;
+        document.getElementById('stat-expired-users').textContent = stats.expiredUsers || 0;
+      } catch (error) {
+        console.error('获取统计数据失败:', error);
+      }
+    }
+    
+    // 加载系统配置
+    async function loadSystemSettings() {
+      try {
+        const response = await fetch('/api/admin/getSystemSettings');
+        if (!response.ok) throw new Error('Failed to fetch settings');
+        
+        const data = await response.json();
+        
+        if (data.success && data.settings) {
+          const settings = data.settings;
+          
+          document.getElementById('input-enableTrial').checked = settings.enableTrial || false;
+          document.getElementById('input-trialDays').value = settings.trialDays || 1;
+          document.getElementById('input-requireInviteCode').checked = settings.requireInviteCode || false;
+          document.getElementById('input-pendingOrderExpiry').value = settings.pendingOrderExpiry || 30;
+          document.getElementById('input-paymentOrderExpiry').value = settings.paymentOrderExpiry || 15;
+        }
+      } catch (error) {
+        console.error('加载系统配置失败:', error);
+      }
+    }
+    
+    // 保存系统配置
+    async function saveSystemSettings() {
+      try {
+        const settings = {
+          enableTrial: document.getElementById('input-enableTrial').checked,
+          trialDays: parseInt(document.getElementById('input-trialDays').value),
+          requireInviteCode: document.getElementById('input-requireInviteCode').checked,
+          pendingOrderExpiry: parseInt(document.getElementById('input-pendingOrderExpiry').value),
+          paymentOrderExpiry: parseInt(document.getElementById('input-paymentOrderExpiry').value)
+        };
+        
+        const response = await fetch('/api/admin/updateSystemSettings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showAlert('保存成功', 'success');
+        } else {
+          showAlert('保存失败: ' + (result.error || '未知错误'), 'error');
+        }
+      } catch (error) {
+        console.error('保存系统配置失败:', error);
+        showAlert('保存失败: ' + error.message, 'error');
+      }
+    }
+    
+    // 加载最近注册用户
+    async function loadRecentUsers() {
+      try {
+        const accountResponse = await fetch('/api/admin/users');
+        if (!accountResponse.ok) throw new Error('Failed to fetch user accounts');
+        
+        const result = await accountResponse.json();
+        const accounts = result.users || [];
+        const recentAccounts = accounts.slice(0, 5);
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = '';
+        
+        for (const account of recentAccounts) {
+          const detailResponse = await fetch('/api/admin/user/' + account.uuid);
+          if (!detailResponse.ok) continue;
+          
+          const userDetail = await detailResponse.json();
+          
+          let statusClass = '';
+          let statusText = '';
+          
+          if (!userDetail.enabled) {
+            statusClass = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+            statusText = '已禁用';
+          } else if (userDetail.expiry && userDetail.expiry < Date.now()) {
+            statusClass = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+            statusText = '已过期';
+          } else {
+            statusClass = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+            statusText = '正常';
+          }
+          
+          const registerTime = userDetail.registeredAt 
+            ? new Date(userDetail.registeredAt).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              }).replace(/\\//g, '-')
+            : '未知';
+          
+          const shortUuid = account.uuid.substring(0, 13) + '...';
+          
+          const row = '<tr>' +
+            '<td class="px-6 py-4">' +
+              '<div class="font-medium">' + shortUuid + '</div>' +
+              '<div class="text-[10px] text-muted-light">' + (account.account || '无账号') + '</div>' +
+            '</td>' +
+            '<td class="px-6 py-4 text-muted-light">' + registerTime + '</td>' +
+            '<td class="px-6 py-4">' +
+              '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ' + statusClass + '">' +
+                statusText +
+              '</span>' +
+            '</td>' +
+            '<td class="px-6 py-4 text-right">' +
+              '<button class="text-primary dark:text-white hover:underline text-xs font-medium" onclick="switchSection(\'users\')">编辑</button>' +
+            '</td>' +
+          '</tr>';
+          
+          tbody.innerHTML += row;
+        }
+        
+        if (recentAccounts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-muted-light">暂无注册用户</td></tr>';
+        }
+      } catch (error) {
+        console.error('加载最近注册用户失败:', error);
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-red-600">加载用户数据失败: ' + error.message + '</td></tr>';
+      }
+    }
+    
+    // 导出数据
+    async function exportData() {
+      try {
+        const res = await fetch('/api/admin/export-all');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'vles-data-' + Date.now() + '.json';
+        a.click();
+        alert('✅ 数据导出成功');
+      } catch (e) {
+        alert('❌ 导出失败: ' + e.message);
+      }
+    }
+    
+    // 导入数据
+    async function importData() {
+      alert('数据导入功能开发中...');
+    }
+    
+    // 修改密码
+    async function changePassword() {
+      const oldPassword = document.getElementById('oldPassword').value.trim();
+      const newPassword = document.getElementById('newPassword').value.trim();
+      const confirmPassword = document.getElementById('confirmPassword').value.trim();
+      
+      if (!oldPassword || !newPassword || !confirmPassword) return alert('请填写完整信息');
+      if (newPassword.length < 6) return alert('新密码至少6位');
+      if (newPassword !== confirmPassword) return alert('两次输入的新密码不一致');
+      
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({oldPassword, newPassword})
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        alert('✅ 密码修改成功，请重新登录');
+        document.getElementById('oldPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+        setTimeout(() => adminLogout(), 2000);
+      } else {
+        alert('❌ ' + (data.error || '修改失败'));
+      }
+    }
+    
+    // 退出登录
+    async function adminLogout() {
+      await fetch('/api/admin/logout', {method: 'POST'});
+      location.reload();
+    }
+    
+    // 更新时间显示
+    function updateTime() {
+      const now = new Date();
+      const timeStr = now.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const elem = document.getElementById('last-update-time');
+      if (elem) elem.textContent = timeStr;
+    }
+    
+    // 页面加载时获取数据
+    document.addEventListener('DOMContentLoaded', () => {
+      updateTime();
+      fetchDashboardStats();
+      loadSystemSettings();
+      loadRecentUsers();
+      
+      // 默认激活第一个导航项
+      const firstNavLink = document.querySelector('.nav-link');
+      if (firstNavLink) {
+        firstNavLink.classList.add('bg-zinc-100', 'dark:bg-zinc-800', 'text-primary', 'dark:text-white', 'font-medium');
       }
     });
-    bestDomainsData=[...manualDomains,...newAutoDomains];
-    renderBestDomainList();
-    const saveRes=await fetch('/api/admin/best-domains',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bestDomains:bestDomainsData})});
-    if(saveRes.ok){toast('✅ 成功获取 '+result.count+' 条'+ipVersion+'优选IP，已替换')}
-    else{toast('⚠️ 获取成功但保存失败，请手动保存')}
-  }catch(e){console.error(e);toast('❌ 获取失败:'+e.message)}
-  finally{btn.innerText=originalText;btn.disabled=false}
-}
-
-async function saveBestDomainSettings(){try{const res=await fetch('/api/admin/best-domains',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bestDomains:bestDomainsData})});if(res.ok){toast('保存成功')}else{toast('保存失败')}}catch(e){console.error(e);toast('保存失败')}}async function saveSettings(){const data={subUrl:document.getElementById('subUrl').value,pendingOrderExpiry:parseInt(document.getElementById('pendingOrderExpiry').value)||24,paymentOrderExpiry:parseInt(document.getElementById('paymentOrderExpiry').value)||1,customLink1Url:document.getElementById('customLink1').value,customLink2Url:document.getElementById('customLink2').value,requireInviteCode:document.getElementById('requireInviteCode').checked?'true':'false',autoCleanupDays:parseInt(document.getElementById('autoCleanupDays').value)||0};const res=await fetch('/api/admin/updateSystemSettings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok)toast('配置已保存');else toast('保存失败')}async function adminLogout(){await fetch('/api/admin/logout',{method:'POST'});location.reload()}async function changePassword(){const oldPassword=document.getElementById('oldPassword').value.trim();const newPassword=document.getElementById('newPassword').value.trim();const confirmPassword=document.getElementById('confirmPassword').value.trim();if(!oldPassword||!newPassword||!confirmPassword)return alert('请填写完整信息');if(newPassword.length<6)return alert('新密码至少6位');if(newPassword!==confirmPassword)return alert('两次输入的新密码不一致');const res=await fetch('/api/admin/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({oldPassword,newPassword})});const data=await res.json();if(res.ok){toast('密码修改成功，请重新登录');document.getElementById('oldPassword').value='';document.getElementById('newPassword').value='';document.getElementById('confirmPassword').value='';setTimeout(()=>adminLogout(),2000)}else{alert(data.error||'修改失败')}}async function exportData(){try{const res=await fetch('/api/admin/export-all');const data=await res.json();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='vles-data-'+Date.now()+'.json';a.click();toast('数据导出成功')}catch(e){alert('导出失败:'+e.message)}}async function exportAllData(){return exportData()}async function importData(){const fileInput=document.getElementById('importFile');if(!fileInput||!fileInput.files[0]){alert('请先选择备份文件');return}const file=fileInput.files[0];const reader=new FileReader();reader.onload=async function(e){try{const jsonData=JSON.parse(e.target.result);if(!confirm('确定要导入数据吗？此操作将覆盖现有数据！'))return;const res=await fetch('/api/admin/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(jsonData)});const result=await res.json();if(result.success){let msg='导入完成！\\n';if(result.counts){msg+='用户: '+result.counts.users+'\\n';msg+='账号: '+result.counts.userAccounts+'\\n';msg+='设置: '+result.counts.settings+'\\n';msg+='套餐: '+result.counts.plans+'\\n';msg+='订单: '+result.counts.orders+'\\n';msg+='公告: '+result.counts.announcements+'\\n';msg+='邀请码: '+result.counts.inviteCodes}alert(msg);location.reload()}else{alert('导入失败: '+(result.error||'未知错误'))}}catch(err){alert('文件解析失败: '+err.message)}};reader.readAsText(file)}async function importAllDataFile(input){if(!input.files||!input.files[0])return;const file=input.files[0];const reader=new FileReader();reader.onload=async function(e){try{const jsonData=JSON.parse(e.target.result);if(!confirm('确定要导入数据吗？此操作将覆盖现有数据！'))return;const res=await fetch('/api/admin/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(jsonData)});const result=await res.json();if(result.success){let msg='导入完成！\\n';if(result.counts){msg+='用户: '+result.counts.users+'\\n';msg+='账号: '+result.counts.userAccounts+'\\n';msg+='设置: '+result.counts.settings+'\\n';msg+='套餐: '+result.counts.plans+'\\n';msg+='订单: '+result.counts.orders+'\\n';msg+='公告: '+result.counts.announcements+'\\n';msg+='邀请码: '+result.counts.inviteCodes}alert(msg);location.reload()}else{alert('导入失败: '+(result.error||'未知错误'))}}catch(err){alert('文件解析失败: '+err.message)}};reader.readAsText(file);input.value=''}async function loadLogs(){try{const res=await fetch('/api/admin/logs?limit=100');const data=await res.json();const container=document.getElementById('logsList');if(!data.logs||data.logs.length===0){container.innerHTML='<div style="padding:20px;text-align:center;color:#999">暂无日志</div>';return}let html='';data.logs.forEach(log=>{const levelColors={'info':'#1890ff','success':'#52c41a','warning':'#faad14','error':'#ff4d4f'};const levelColor=levelColors[log.level]||'#666';const time=new Date(log.timestamp).toLocaleString('zh-CN');html+='<div style="border-bottom:1px solid #eee;padding:8px;display:flex;gap:15px;font-size:13px;align-items:flex-start">';html+='<div style="min-width:150px;color:#999">'+time+'</div>';html+='<div style="min-width:60px;color:'+levelColor+';font-weight:600">['+log.level.toUpperCase()+']</div>';html+='<div style="flex:1;color:#333"><b>'+log.action+'</b>';if(log.details)html+='<br><span style="color:#666;font-size:12px">'+log.details+'</span>';html+='</div></div>'});container.innerHTML=html}catch(e){document.getElementById('logsList').innerHTML='<div style="color:red">加载失败</div>'}}async function clearLogs(){if(!confirm('确定清空所有日志？'))return;const res=await fetch('/api/admin/logs/clear',{method:'POST'});if(res.ok){toast('日志已清空');loadLogs()}else{alert('操作失败')}}async function loadStats(){try{const res=await fetch('/api/admin/statistics');const stats=await res.json();const overview=document.getElementById('statsOverview');let html='';html+='<div style="padding:20px;background:#e6f7ff;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--primary)">'+stats.users.total+'</div><div style="margin-top:8px;color:#666">总用户数</div></div>';html+='<div style="padding:20px;background:#f6ffed;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--success)">'+stats.users.active+'</div><div style="margin-top:8px;color:#666">活跃用户</div></div>';html+='<div style="padding:20px;background:#fff7e6;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--warning)">'+stats.orders.pending+'</div><div style="margin-top:8px;color:#666">待审核订单</div></div>';html+='<div style="padding:20px;background:#fff1f0;border-radius:8px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--danger)">¥'+stats.orders.totalRevenue+'</div><div style="margin-top:8px;color:#666">总收入</div></div>';overview.innerHTML=html;const userTrend=document.getElementById('userTrend');let trendHtml='<div style="display:flex;flex-direction:column;gap:10px">';stats.users.last7Days.forEach(d=>{const barWidth=d.count*20||5;trendHtml+='<div style="display:flex;align-items:center;gap:15px">';trendHtml+='<div style="min-width:100px;color:#666;font-size:14px">'+d.date+'</div>';trendHtml+='<div style="background:linear-gradient(90deg,var(--primary),#69c0ff);height:25px;width:'+barWidth+'px;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding:0 10px;color:white;font-size:12px;font-weight:600">'+d.count+'</div>';trendHtml+='</div>'});trendHtml+='</div>';userTrend.innerHTML=trendHtml;const orderTrend=document.getElementById('orderTrend');let orderHtml='<div style="display:flex;flex-direction:column;gap:10px">';stats.orders.last7Days.forEach(d=>{const barWidth=d.count*20||5;const revenueWidth=d.revenue*2||5;orderHtml+='<div style="margin-bottom:15px">';orderHtml+='<div style="display:flex;align-items:center;gap:15px;margin-bottom:5px">';orderHtml+='<div style="min-width:100px;color:#666;font-size:14px">'+d.date+'</div>';orderHtml+='<div style="background:linear-gradient(90deg,var(--success),#95de64);height:20px;width:'+barWidth+'px;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;color:white;font-size:11px;font-weight:600">'+d.count+'单</div>';orderHtml+='</div>';orderHtml+='<div style="display:flex;align-items:center;gap:15px">';orderHtml+='<div style="min-width:100px"></div>';orderHtml+='<div style="background:linear-gradient(90deg,var(--warning),#ffd666);height:20px;width:'+revenueWidth+'px;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;color:white;font-size:11px;font-weight:600">¥'+d.revenue+'</div>';orderHtml+='</div>';orderHtml+='</div>'});orderHtml+='</div>';orderTrend.innerHTML=orderHtml}catch(e){console.error(e);toast('加载统计数据失败')}}</script></body></html>`;
+  </script>
+</body>
+</html>`;
 }
 
 module.exports = {

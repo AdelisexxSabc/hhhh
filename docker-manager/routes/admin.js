@@ -45,6 +45,7 @@ async function login(req, res) {
         // 检查或创建管理员账号
         let adminUser = db.getUserByUsername(ADMIN_USERNAME);
         if (!adminUser) {
+            console.log('[管理员] 管理员账号不存在，正在创建...');
             const passwordHash = db.hashPassword(ADMIN_PASSWORD);
             const adminUUID = db.generateUUID();
             
@@ -53,6 +54,7 @@ async function login(req, res) {
             db.addUser(adminUUID, '管理员', expiry);
             db.createUserAccount(ADMIN_USERNAME, passwordHash, '', adminUUID);
             adminUser = db.getUserByUsername(ADMIN_USERNAME);
+            console.log('[管理员] 管理员账号创建成功:', adminUUID);
         }
         
         // 创建会话
@@ -243,20 +245,24 @@ function updateUser(req, res) {
     }
     
     try {
-        const { uuid, name, expiryDate, newPassword, frontUsername, frontPassword } = req.body;
+        const { uuid, name, expiry, expiryDate, newPassword, frontUsername, frontPassword } = req.body;
         
         if (!uuid) {
             return res.status(400).json({ error: 'UUID required' });
         }
         
-        let expiry = null;
-        if (expiryDate) {
+        let finalExpiry = null;
+        if (expiry !== undefined && expiry !== null) {
+            // 前端发送时间戳
+            finalExpiry = expiry;
+        } else if (expiryDate) {
+            // 兼容旧版日期字符串格式
             const [year, month, day] = expiryDate.split('-').map(Number);
             const beijingEndOfDay = new Date(Date.UTC(year, month - 1, day, 23 - 8, 59, 59, 999));
-            expiry = beijingEndOfDay.getTime();
+            finalExpiry = beijingEndOfDay.getTime();
         }
         
-        db.updateUser(uuid, name, expiry);
+        db.updateUser(uuid, name, finalExpiry);
         
         // 更新密码
         if (newPassword && newPassword.trim() !== '') {
@@ -301,6 +307,16 @@ function deleteUsers(req, res) {
         
         if (uuids) {
             const uuidList = uuids.split(',');
+            
+            // 检查是否包含管理员账号
+            const adminUser = db.getUserByUsername(ADMIN_USERNAME);
+            if (adminUser) {
+                const adminAccount = db.getUserAccountByUserId(adminUser.id);
+                if (adminAccount && uuidList.includes(adminAccount.uuid)) {
+                    return res.status(403).json({ error: '不能删除管理员账号' });
+                }
+            }
+            
             db.deleteUsers(uuidList);
         }
         
@@ -383,6 +399,21 @@ function getUserAccount(req, res) {
         
     } catch (e) {
         console.error('获取账号错误:', e);
+        res.status(500).json({ error: '服务器错误' });
+    }
+}
+
+// 获取所有用户列表
+function getAllUsers(req, res) {
+    if (!validateAdminSession(req)) {
+        return res.status(401).json({ error: '未授权' });
+    }
+    
+    try {
+        const users = db.getAllUsers();
+        res.json({ success: true, users });
+    } catch (e) {
+        console.error('获取用户列表错误:', e);
         res.status(500).json({ error: '服务器错误' });
     }
 }
@@ -666,7 +697,26 @@ function getOrders(req, res) {
     }
     
     const status = req.query.status || 'all';
-    const orders = db.getOrders(status);
+    let orders = db.getOrders(status);
+    
+    // 检查订单过期时间
+    const settings = db.getSettings() || {};
+    const now = Date.now();
+    const pendingExpiry = settings.pendingOrderExpiry || 0; // 分钟
+    const paymentExpiry = settings.paymentOrderExpiry || 15; // 分钟
+    
+    orders = orders.map(order => {
+        if (order.status === 'pending' && pendingExpiry > 0) {
+            const expiryTime = order.created_at + (pendingExpiry * 60 * 1000);
+            if (now > expiryTime) {
+                // 更新订单状态为已过期
+                db.updateOrderStatus(order.id, 'expired');
+                order.status = 'expired';
+            }
+        }
+        return order;
+    });
+    
     res.json({ success: true, orders: orders });
 }
 
@@ -1291,6 +1341,7 @@ module.exports = {
     deleteUsers,
     updateStatus,
     getUserAccount,
+    getAllUsers,
     getUserDetail,
     saveSettings,
     getSystemSettings,
