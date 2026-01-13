@@ -28,8 +28,278 @@ function formatBeijingDate(date) {
 }
 
 function renderAdminLoginPage(adminPath) {
-    return `<!DOCTYPE html><html><head><title>管理员登录</title><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;justify-content:center;align-items:center}.login-box{background:white;padding:40px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.2);width:100%;max-width:400px}.login-box h2{text-align:center;margin-bottom:30px;color:#333}.form-group{margin-bottom:20px}label{display:block;margin-bottom:8px;color:#666;font-size:14px}input[type=text],input[type=password]{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px}input:focus{outline:none;border-color:#667eea}button{width:100%;padding:14px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:6px;font-size:16px;cursor:pointer}button:hover{transform:translateY(-2px);box-shadow:0 5px 20px rgba(102,126,234,0.4)}.error{color:#ff4d4f;font-size:14px;margin-top:10px;text-align:center;display:none}</style></head><body><div class="login-box"><h2>🔐 管理员登录</h2><form id="loginForm"><div class="form-group"><label>用户名</label><input type="text" id="username" name="username" required></div><div class="form-group"><label>密码</label><input type="password" id="password" name="password" required></div><button type="submit">登 录</button><div class="error" id="errorMsg"></div></form></div><script>
-document.getElementById('loginForm').addEventListener('submit',async function(e){e.preventDefault();const errorMsg=document.getElementById('errorMsg');errorMsg.style.display='none';try{const formData=new FormData(this);const response=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:formData.get('username'),password:formData.get('password')})});const result=await response.json();if(result.success){window.location.href='${adminPath}';}else{errorMsg.textContent=result.error||'登录失败';errorMsg.style.display='block';}}catch(e){errorMsg.textContent='网络错误，请重试';errorMsg.style.display='block';}});</script></body></html>`;
+    return `<!DOCTYPE html>
+<html class="light" lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CFly - 管理员登录</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%23000'/><path d='M 60 15 L 30 50 h 15 L 40 85 L 70 50 H 55 Z' fill='%23fff'/></svg>">
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        primary: "#09090b",
+        "background-light": "#ffffff",
+        "background-dark": "#09090b",
+        border: { light: "#e4e4e7", dark: "#27272a" }
+      },
+      fontFamily: {
+        display: ["Inter", "Noto Sans SC", "sans-serif"],
+        sans: ["Inter", "Noto Sans SC", "sans-serif"],
+      },
+      borderRadius: { DEFAULT: "0.5rem", lg: "0.75rem" }
+    }
+  }
+};
+</script>
+<style>
+body { font-family: 'Inter', 'Noto Sans SC', sans-serif; -webkit-font-smoothing: antialiased; }
+.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+
+/* 全球边缘节点网络背景 */
+#network-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+#network-bg canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.content-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+/* 登录卡片增强对比 */
+.login-card {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02);
+}
+
+.dark .login-card {
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 60px rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+</style>
+</head>
+<body class="bg-slate-50 dark:bg-zinc-950 min-h-screen flex items-center justify-center p-4 overflow-hidden">
+<!-- 全球边缘节点网络背景 -->
+<div id="network-bg"></div>
+
+<div class="content-wrapper w-full max-w-md">
+<div class="text-center mb-8">
+<div class="inline-flex items-center gap-2 mb-4">
+<div class="w-10 h-10 bg-primary rounded flex items-center justify-center shadow-lg">
+<span class="text-white material-symbols-outlined text-lg">bolt</span>
+</div>
+<span class="font-bold text-2xl tracking-tight text-slate-900 dark:text-white">CFly</span>
+</div>
+<p class="text-slate-600 dark:text-zinc-400">全球边缘加速网络</p>
+</div>
+
+<div class="login-card border border-slate-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+<div class="flex border-b border-slate-200 dark:border-zinc-800">
+<button class="flex-1 px-4 py-3 text-sm font-medium transition-colors bg-white dark:bg-zinc-950 text-slate-900 dark:text-slate-100">管理员登录</button>
+</div>
+
+<div id="loginForm" class="p-6 space-y-4">
+<div class="space-y-2">
+<label class="text-sm font-medium text-slate-700 dark:text-zinc-300">用户名</label>
+<input id="username" type="text" autocomplete="username" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-zinc-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-slate-400 dark:placeholder:text-zinc-600" placeholder="请输入用户名"/>
+</div>
+<div class="space-y-2">
+<label class="text-sm font-medium text-slate-700 dark:text-zinc-300">密码</label>
+<input id="password" type="password" autocomplete="current-password" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-zinc-800 rounded-md focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder:text-slate-400 dark:placeholder:text-zinc-600" placeholder="请输入密码"/>
+</div>
+<button onclick="handleLogin()" class="w-full bg-primary text-white py-2 rounded-md hover:opacity-90 transition-opacity font-medium">登录</button>
+<div id="loginError" class="hidden text-sm text-red-600"></div>
+</div>
+</div>
+</div>
+
+<div class="fixed bottom-6 right-6 z-10">
+<button onclick="document.documentElement.classList.toggle('dark');updateNetworkTheme();" class="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shadow-lg flex items-center justify-center hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors">
+<span class="material-symbols-outlined dark:hidden">dark_mode</span>
+<span class="material-symbols-outlined hidden dark:block">light_mode</span>
+</button>
+</div>
+
+<script>
+// 全球边缘节点网络背景动画
+(function() {
+  const container = document.getElementById('network-bg');
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  container.appendChild(canvas);
+  
+  let width, height;
+  let nodes = [];
+  let animationId;
+  
+  function resizeCanvas() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+  }
+  
+  class Node {
+    constructor() {
+      this.x = Math.random() * width;
+      this.y = Math.random() * height;
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.radius = Math.random() * 2 + 1;
+      this.connections = [];
+    }
+    
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      
+      if (this.x < 0 || this.x > width) this.vx *= -1;
+      if (this.y < 0 || this.y > height) this.vy *= -1;
+    }
+    
+    draw() {
+      const isDark = document.documentElement.classList.contains('dark');
+      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.3)';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  function init() {
+    resizeCanvas();
+    nodes = [];
+    for (let i = 0; i < 80; i++) {
+      nodes.push(new Node());
+    }
+  }
+  
+  function animate() {
+    const isDark = document.documentElement.classList.contains('dark');
+    ctx.clearRect(0, 0, width, height);
+    
+    nodes.forEach((node, i) => {
+      node.update();
+      node.draw();
+      
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[j].x - node.x;
+        const dy = nodes[j].y - node.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < 150) {
+          ctx.strokeStyle = isDark 
+            ? \`rgba(255, 255, 255, \${0.15 * (1 - distance / 150)})\`
+            : \`rgba(0, 0, 0, \${0.15 * (1 - distance / 150)})\`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(node.x, node.y);
+          ctx.lineTo(nodes[j].x, nodes[j].y);
+          ctx.stroke();
+        }
+      }
+    });
+    
+    animationId = requestAnimationFrame(animate);
+  }
+  
+  init();
+  animate();
+  
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+  });
+  
+  window.updateNetworkTheme = function() {
+    // 主题切换时重绘
+  };
+})();
+
+// 登录处理
+async function handleLogin() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const errorDiv = document.getElementById('loginError');
+  const button = event.target;
+  
+  if (!username || !password) {
+    errorDiv.textContent = '请输入用户名和密码';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  
+  errorDiv.classList.add('hidden');
+  button.disabled = true;
+  button.textContent = '登录中...';
+  
+  try {
+    const response = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      button.textContent = '登录成功';
+      window.location.href = '${adminPath}';
+    } else {
+      errorDiv.textContent = result.error || '登录失败';
+      errorDiv.classList.remove('hidden');
+      button.disabled = false;
+      button.textContent = '登录';
+    }
+  } catch (e) {
+    console.error('Login error:', e);
+    errorDiv.textContent = '网络错误，请重试';
+    errorDiv.classList.remove('hidden');
+    button.disabled = false;
+    button.textContent = '登录';
+  }
+}
+
+// Enter键登录
+document.getElementById('password').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    handleLogin();
+  }
+});
+
+// 清除错误
+document.getElementById('username').addEventListener('input', function() {
+  document.getElementById('loginError').classList.add('hidden');
+});
+document.getElementById('password').addEventListener('input', function() {
+  document.getElementById('loginError').classList.add('hidden');
+});
+
+// 自动聚焦
+document.getElementById('username').focus();
+</script>
+</body>
+</html>`;
 }
 
 function renderAdminPanel() {
@@ -39,6 +309,7 @@ function renderAdminPanel() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CFly Panel</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%23000'/><path d='M 60 15 L 30 50 h 15 L 40 85 L 70 50 H 55 Z' fill='%23fff'/></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
@@ -167,6 +438,40 @@ function renderAdminPanel() {
     input:checked + .slider-shadcn:before {
       transform: translateX(16px);
     }
+    /* 侧边栏移动端样式 */
+    #sidebar-overlay {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #sidebar-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    aside {
+      transform: translateX(0);
+      transition: transform 0.3s ease;
+    }
+    @media (max-width: 768px) {
+      aside {
+        transform: translateX(-100%);
+      }
+      aside.mobile-open {
+        transform: translateX(0);
+      }
+      /* 移动端表格优化 */
+      table {
+        font-size: 12px;
+      }
+      th, td {
+        padding: 8px 12px !important;
+        white-space: nowrap;
+      }
+      /* 移动端隐藏部分不重要列 */
+      .hide-mobile {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body class="bg-background-light dark:bg-background-dark text-slate-950 dark:text-slate-50 transition-colors duration-200">
@@ -256,9 +561,12 @@ function renderAdminPanel() {
     </div>
   </div>
   
+  <!-- 移动端遮罩层 -->
+  <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-40 md:hidden" onclick="toggleSidebar()"></div>
+  
   <div class="flex min-h-screen">
     <!-- 侧边栏 -->
-    <aside class="w-64 border-r border-border-light dark:border-border-dark flex flex-col fixed inset-y-0 left-0 z-50 bg-background-light dark:bg-background-dark">
+    <aside id="sidebar" class="w-64 border-r border-border-light dark:border-border-dark flex flex-col fixed inset-y-0 left-0 z-50 bg-background-light dark:bg-background-dark">
       <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center gap-2">
         <div class="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white">
           <span class="material-symbols-outlined">terminal</span>
@@ -337,9 +645,14 @@ function renderAdminPanel() {
     </aside>
     
     <!-- 主内容区 -->
-    <main class="flex-1 ml-64 min-h-screen">
-      <header class="h-16 border-b border-border-light dark:border-border-dark flex items-center justify-between px-8 bg-background-light dark:bg-background-dark">
-        <h1 id="section-title" class="text-xl font-bold tracking-tight">仪表盘概览</h1>
+    <main class="flex-1 md:ml-64 min-h-screen">
+      <header class="h-16 border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 md:px-8 bg-background-light dark:bg-background-dark">
+        <div class="flex items-center gap-3">
+          <button onclick="toggleSidebar()" class="md:hidden p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
+          <h1 id="section-title" class="text-lg md:text-xl font-bold tracking-tight">仪表盘概览</h1>
+        </div>
         <div class="flex items-center gap-4">
           <button class="p-2 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-light dark:text-muted-dark" id="themeToggle">
             <span class="material-symbols-outlined dark:hidden">dark_mode</span>
@@ -354,7 +667,7 @@ function renderAdminPanel() {
         </div>
       </header>
       
-      <div class="p-8 space-y-8 max-w-7xl mx-auto">
+      <div class="p-4 md:p-8 space-y-8 w-full">
         <!-- 仪表盘部分 -->
         <div id="section-dashboard" class="section-content active">
           <!-- 统计卡片 - Shadcn 风格 -->
@@ -414,6 +727,21 @@ function renderAdminPanel() {
                     <option value="7">7 天</option>
                   </select>
                 </div>
+              </div>
+
+              <!-- 自动审核订单 -->
+              <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex flex-col gap-1">
+                  <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-slate-400">check_circle</span>
+                    <label class="text-sm font-semibold">自动审核订单</label>
+                  </div>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">开启后，用户订购<strong class="text-emerald-600 dark:text-emerald-400">免费套餐（价格为0）</strong>将自动审核通过；付费套餐仍需等待支付或手动审核</p>
+                </div>
+                <label class="switch-shadcn">
+                  <input id="input-autoApproveOrder" type="checkbox"/>
+                  <span class="slider-shadcn"></span>
+                </label>
               </div>
 
               <!-- 注册需要邀请码 -->
@@ -494,7 +822,7 @@ function renderAdminPanel() {
               </div>
 
               <!-- 自动清理非活跃用户 -->
-              <div class="p-6">
+              <div class="p-6 border-b border-slate-100 dark:border-slate-800">
                 <div class="flex items-center justify-between mb-4">
                   <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-2">
@@ -514,6 +842,21 @@ function renderAdminPanel() {
                     <input id="input-autoCleanupDays" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-md text-sm" type="number" min="7" value="7"/>
                   </div>
                   <span class="text-sm text-slate-500 dark:text-slate-400 mt-5">天 (超过此天数未登录的用户将被自动删除)</span>
+                </div>
+              </div>
+
+              <!-- API 密钥设置 -->
+              <div class="p-6">
+                <div class="flex flex-col gap-1 mb-4">
+                  <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-slate-400">key</span>
+                    <label class="text-sm font-semibold">API 密钥</label>
+                  </div>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">节点端访问用户数据接口需要验证此密钥，留空则不验证（不推荐）</p>
+                </div>
+                <div class="flex items-center gap-2 max-w-2xl">
+                  <input id="input-apiToken" class="flex-1 px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-800 rounded-md text-sm font-mono" type="text" placeholder="留空表示不启用密钥验证"/>
+                  <button onclick="generateApiToken()" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-sm font-medium rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">生成密钥</button>
                 </div>
               </div>
 
@@ -614,7 +957,8 @@ function renderAdminPanel() {
 
             <!-- 用户表格 -->
             <div class="rounded-md border border-border-light dark:border-border-dark overflow-hidden">
-              <table class="w-full text-sm">
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
                 <thead>
                   <tr class="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-border-light dark:border-border-dark">
                     <th class="h-12 px-4 text-left align-middle font-medium text-muted-light w-[50px]">
@@ -634,6 +978,25 @@ function renderAdminPanel() {
                   </tr>
                 </tbody>
               </table>
+              </div>
+            </div>
+            
+            <!-- 分页控件 -->
+            <div class="flex items-center justify-between px-2">
+              <div class="text-sm text-muted-light">
+                显示第 <span id="page-start">0</span> - <span id="page-end">0</span> 条，共 <span id="total-users">0</span> 条
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="goToPage(currentPage - 1)" id="prev-page" class="px-3 py-1.5 text-sm border border-border-light dark:border-border-dark rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                  上一页
+                </button>
+                <div class="flex items-center gap-1" id="page-numbers">
+                  <!-- 页码按钮动态生成 -->
+                </div>
+                <button onclick="goToPage(currentPage + 1)" id="next-page" class="px-3 py-1.5 text-sm border border-border-light dark:border-border-dark rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  下一页
+                </button>
+              </div>
             </div>
           </section>
         </div>
@@ -780,7 +1143,7 @@ function renderAdminPanel() {
                     </thead>
                     <tbody id="best-domains-list" class="divide-y divide-slate-100 dark:divide-zinc-800">
                       <tr>
-                        <td colspan="4" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600">
+                        <td colspan="5" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600">
                           <span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span>
                           <p class="text-sm">暂无优选域名</p>
                         </td>
@@ -803,13 +1166,12 @@ function renderAdminPanel() {
                         <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400 w-12 text-center">序号</th>
                         <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">名称</th>
                         <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">节点</th>
-                        <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400">延迟</th>
                         <th class="px-4 py-2 font-medium text-slate-500 dark:text-zinc-400 text-right">状态</th>
                       </tr>
                     </thead>
                     <tbody id="node-status-list" class="divide-y divide-slate-100 dark:divide-zinc-800">
                       <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600">
+                        <td colspan="4" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600">
                           <span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span>
                           <p class="text-sm">暂无节点状态数据</p>
                         </td>
@@ -890,6 +1252,7 @@ function renderAdminPanel() {
               <table class="w-full text-left text-sm border-collapse">
                 <thead>
                   <tr class="border-b border-slate-200 dark:border-slate-800 text-slate-500 font-medium">
+                    <th class="px-3 py-4 font-semibold uppercase text-xs tracking-wider w-10"></th>
                     <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">名称</th>
                     <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">周期</th>
                     <th class="px-6 py-4 font-semibold uppercase text-xs tracking-wider">价格</th>
@@ -919,7 +1282,7 @@ function renderAdminPanel() {
                 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                 <input id="order-search" onkeyup="filterOrders()" class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" placeholder="搜索订单号或用户..." type="text"/>
               </div>
-              <select id="order-status-filter" onchange="loadAllOrders()" class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm py-2 pl-3 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none">
+              <select id="order-status-filter" onchange="loadAllOrders(1)" class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md text-sm py-2 pl-3 pr-10 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none">
                 <option value="all">全部订单</option>
                 <option value="pending">待审核</option>
                 <option value="approved">已通过</option>
@@ -928,6 +1291,8 @@ function renderAdminPanel() {
               </select>
             </div>
             <div class="flex items-center gap-2">
+              <button onclick="batchApproveOrders()" class="px-4 py-2 text-sm font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-md transition-colors">批量通过</button>
+              <button onclick="batchRejectOrders()" class="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 rounded-md transition-colors">批量拒绝</button>
               <button onclick="exportOrders()" class="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:opacity-90 transition-opacity">
                 <span class="material-symbols-outlined text-sm">download</span>
                 导出数据
@@ -937,10 +1302,11 @@ function renderAdminPanel() {
           
           <!-- 订单列表 -->
           <div class="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                  <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
+                    <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">
                     <input id="order-check-all" onchange="toggleAllOrderChecks()" class="rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-primary" type="checkbox"/>
                   </th>
                   <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
@@ -958,12 +1324,10 @@ function renderAdminPanel() {
                 </tr>
               </tbody>
             </table>
+            </div>
             <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <span id="orders-count" class="text-sm text-slate-500">共 0 条订单</span>
-              <div class="flex items-center gap-2">
-                <button onclick="batchApproveOrders()" class="px-3 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded transition-colors">批量通过</button>
-                <button onclick="batchRejectOrders()" class="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors">批量拒绝</button>
-              </div>
+              <div id="orders-pagination"></div>
             </div>
           </div>
         </div>
@@ -1121,6 +1485,14 @@ function renderAdminPanel() {
         targetSection.classList.add('active');
       }
       
+      // 移动端切换页面后自动关闭侧边栏
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      if (sidebar && sidebar.classList.contains('mobile-open')) {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+      }
+      
       // 保存当前section
       if (!skipSave) {
         localStorage.setItem('currentSection', sectionName);
@@ -1160,15 +1532,6 @@ function renderAdminPanel() {
       if (sectionName === 'announcements') loadAllAnnouncements();
       if (sectionName === 'payment') loadAllPaymentChannels();
       if (sectionName === 'invites') loadAllInviteCodes();
-    }
-    
-    // 页面加载时恢复上次浏览的section
-    const lastSection = localStorage.getItem('currentSection');
-    if (lastSection && lastSection !== 'dashboard') {
-      switchSection(lastSection, true);
-    } else {
-      // 默认加载用户列表
-      loadAllUsers();
     }
     
     // ========== 模态框控制 ==========
@@ -1308,6 +1671,11 @@ function renderAdminPanel() {
     // ========== 用户管理功能 ==========
     let allUsersData = [];
     
+    // 分页相关变量
+    let currentPage = 1;
+    const pageSize = 10;
+    let totalPages = 1;
+    
     async function loadAllUsers() {
       try {
         const response = await fetch('/api/admin/users');
@@ -1317,19 +1685,42 @@ function renderAdminPanel() {
         const users = result.users || [];
         allUsersData = users;
         
-        // 更新用户数量
+        // 更新总用户数
         document.getElementById('user-count').textContent = users.length;
+        document.getElementById('total-users').textContent = users.length;
         
-        const tbody = document.getElementById('users-list-body');
-        tbody.innerHTML = '';
+        // 计算总页数
+        totalPages = Math.ceil(users.length / pageSize) || 1;
         
-        if (users.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-muted-light">暂无用户数据</td></tr>';
-          return;
-        }
-        
-        // 一次性渲染所有用户
-        users.forEach(u => {
+        // 显示当前页
+        renderUserPage();
+        renderPagination();
+      } catch (error) {
+        console.error('加载用户列表失败:', error);
+        document.getElementById('users-list-body').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-red-600">加载失败: '+ error.message +'</td></tr>';
+      }
+    }
+    
+    function renderUserPage() {
+      const tbody = document.getElementById('users-list-body');
+      tbody.innerHTML = '';
+      
+      if (allUsersData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-muted-light">暂无用户数据</td></tr>';
+        return;
+      }
+      
+      // 计算当前页的用户
+      const start = (currentPage - 1) * pageSize;
+      const end = Math.min(start + pageSize, allUsersData.length);
+      const pageUsers = allUsersData.slice(start, end);
+      
+      // 更新分页信息
+      document.getElementById('page-start').textContent = allUsersData.length > 0 ? start + 1 : 0;
+      document.getElementById('page-end').textContent = end;
+      
+      // 渲染当前页的用户
+      pageUsers.forEach(u => {
           const isExpired = u.expiry && u.expiry < Date.now();
           const isEnabled = u.enabled;
           
@@ -1394,8 +1785,7 @@ function renderAdminPanel() {
                       (!isEnabled && !isExpired ? 
                         '<button onclick="toggleUserStatus(\\'' + u.uuid + '\\',true)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
                           '<span class="material-symbols-outlined text-sm">check_circle</span>启用' +
-                        '</button>' : '')
-                    ) +
+                        '</button>' : '')) +
                     (!isExpired ? 
                       '<button onclick="openRenewUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
                         '<span class="material-symbols-outlined text-sm">schedule</span>续期' +
@@ -1415,11 +1805,144 @@ function renderAdminPanel() {
           '</tr>';
           
           tbody.innerHTML += row;
-        });
-      } catch (error) {
-        console.error('加载用户列表失败:', error);
-        document.getElementById('users-list-body').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-red-600">加载失败: '+ error.message +'</td></tr>';
+      });
+    }
+    
+    function renderPagination() {
+      const pageNumbers = document.getElementById('page-numbers');
+      pageNumbers.innerHTML = '';
+      
+      // 生成页码按钮
+      const maxButtons = 5;
+      let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+      
+      if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
       }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.onclick = () => goToPage(i);
+        btn.className = 'px-3 py-1.5 text-sm border border-border-light dark:border-border-dark rounded-md transition-colors ' + 
+          (i === currentPage 
+            ? 'bg-primary text-white dark:bg-white dark:text-black' 
+            : 'hover:bg-slate-100 dark:hover:bg-zinc-800');
+        pageNumbers.appendChild(btn);
+      }
+      
+      // 更新上一页/下一页按钮状态
+      document.getElementById('prev-page').disabled = currentPage === 1;
+      document.getElementById('next-page').disabled = currentPage === totalPages;
+    }
+    
+    function goToPage(page) {
+      if (page < 1 || page > totalPages || page === currentPage) return;
+      currentPage = page;
+      
+      const tbody = document.getElementById('users-list-body');
+      tbody.innerHTML = '';
+      
+      // 使用过滤后的数据或全部数据
+      const dataSource = window.filteredUsersData || allUsersData;
+      const start = (currentPage - 1) * pageSize;
+      const end = Math.min(start + pageSize, dataSource.length);
+      const pageUsers = dataSource.slice(start, end);
+      
+      document.getElementById('page-start').textContent = dataSource.length > 0 ? start + 1 : 0;
+      document.getElementById('page-end').textContent = end;
+      
+      // 渲染用户
+      pageUsers.forEach(u => {
+        const isExpired = u.expiry && u.expiry < Date.now();
+        const isEnabled = u.enabled;
+        
+        let statusBadge = '';
+        
+        if (!u.expiry) {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-border-light dark:border-border-dark bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-slate-400">未激活</span>';
+        } else if (isExpired) {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-border-light dark:border-border-dark bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-slate-400">已过期</span>';
+        } else if (!isEnabled) {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">已禁用</span>';
+        } else {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950 px-2.5 py-0.5 text-xs font-semibold text-green-600 dark:text-green-400">正常</span>';
+        }
+        
+        const expiryTime = u.expiry 
+          ? new Date(u.expiry).toLocaleString('zh-CN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }).replace(/\\//g, '-')
+          : '未激活';
+        
+        const createTime = u.createAt 
+          ? new Date(u.createAt).toLocaleString('zh-CN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }).replace(/\\//g, '-')
+          : '-';
+        
+        const row = '<tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 transition-colors">' +
+          '<td class="p-4 align-middle">' +
+            '<input type="checkbox" class="u-check rounded border-slate-300 dark:border-zinc-700 text-primary focus:ring-primary cursor-pointer" value="'+ u.uuid +'" onchange="updateBatchBar()" data-name="'+ (u.name || '') +'"/>' +
+          '</td>' +
+          '<td class="p-4 align-middle font-mono text-[13px] text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onclick="copyToClipboard(\\'' + u.uuid + '\\')" title="点击复制">'+ u.uuid +'</td>' +
+          '<td class="p-4 align-middle">'+ (u.name || '-') +'</td>' +
+          '<td class="p-4 align-middle text-muted-light">'+ createTime +'</td>' +
+          '<td class="p-4 align-middle text-muted-light">'+ expiryTime +'</td>' +
+          '<td class="p-4 align-middle">'+ statusBadge +'</td>' +
+          '<td class="p-4 align-middle text-right">' +
+            '<div class="relative inline-block">' +
+              '<button id="menu-btn-' + u.uuid + '" onclick="toggleUserMenu(\\'' + u.uuid + '\\')" class="user-menu-btn h-8 w-8 inline-flex items-center justify-center rounded-md border border-border-light dark:border-border-dark hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">' +
+                '<span class="material-symbols-outlined text-sm">more_horiz</span>' +
+              '</button>' +
+              '<div id="menu-'+ u.uuid +'" class="user-menu hidden absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-border-light dark:border-border-dark rounded-md shadow-lg z-50">' +
+                '<div class="py-1">' +
+                  '<button onclick="showSubLinkModal(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">link</span>订阅链接' +
+                  '</button>' +
+                  '<button onclick="openEditUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">edit</span>编辑' +
+                  '</button>' +
+                  (isEnabled && !isExpired ? 
+                    '<button onclick="toggleUserStatus(\\'' + u.uuid + '\\',false)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">block</span>禁用' +
+                    '</button>' :
+                    (!isEnabled && !isExpired ? 
+                      '<button onclick="toggleUserStatus(\\'' + u.uuid + '\\',true)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                        '<span class="material-symbols-outlined text-sm">check_circle</span>启用' +
+                      '</button>' : '')
+                  ) +
+                  (!isExpired ? 
+                    '<button onclick="openRenewUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">schedule</span>续期' +
+                    '</button>' : ''
+                  ) +
+                  '<button onclick="confirmResetUUID(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">refresh</span>重置UUID' +
+                  '</button>' +
+                  '<div class="border-t border-border-light dark:border-border-dark"></div>' +
+                  '<button onclick="deleteUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">delete</span>删除' +
+                  '</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+        
+        tbody.innerHTML += row;
+      });
+      
+      renderPagination();
     }
     
     function openAddUserModal() {
@@ -1541,19 +2064,148 @@ function renderAdminPanel() {
     
     // 搜索用户
     function filterUsers() {
-      const searchText = document.getElementById('search-input').value.toLowerCase();
-      const rows = document.querySelectorAll('#users-list-body tr');
+      const query = document.getElementById('search-input').value.toLowerCase().trim();
       
-      rows.forEach(row => {
-        const uuid = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
-        const name = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
-        
-        if (uuid.includes(searchText) || name.includes(searchText)) {
-          row.style.display = '';
-        } else {
-          row.style.display = 'none';
-        }
+      if (!query) {
+        // 没有搜索词，重置到第一页
+        currentPage = 1;
+        totalPages = Math.ceil(allUsersData.length / pageSize) || 1;
+        document.getElementById('user-count').textContent = allUsersData.length;
+        document.getElementById('total-users').textContent = allUsersData.length;
+        renderUserPage();
+        renderPagination();
+        return;
+      }
+      
+      // 过滤用户
+      const filteredUsers = allUsersData.filter(u => {
+        const uuid = (u.uuid || '').toLowerCase();
+        const name = (u.name || '').toLowerCase();
+        return uuid.includes(query) || name.includes(query);
       });
+      
+      // 更新显示的用户数
+      document.getElementById('user-count').textContent = filteredUsers.length;
+      document.getElementById('total-users').textContent = filteredUsers.length;
+      
+      // 重置到第一页并重新渲染
+      currentPage = 1;
+      totalPages = Math.ceil(filteredUsers.length / pageSize) || 1;
+      
+      const tbody = document.getElementById('users-list-body');
+      tbody.innerHTML = '';
+      
+      if (filteredUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-muted-light">未找到匹配的用户</td></tr>';
+        document.getElementById('page-start').textContent = '0';
+        document.getElementById('page-end').textContent = '0';
+        document.getElementById('page-numbers').innerHTML = '';
+        document.getElementById('prev-page').disabled = true;
+        document.getElementById('next-page').disabled = true;
+        return;
+      }
+      
+      // 显示第一页的搜索结果
+      const start = 0;
+      const end = Math.min(pageSize, filteredUsers.length);
+      const pageUsers = filteredUsers.slice(start, end);
+      
+      document.getElementById('page-start').textContent = 1;
+      document.getElementById('page-end').textContent = end;
+      
+      // 渲染搜索结果
+      pageUsers.forEach(u => {
+        const isExpired = u.expiry && u.expiry < Date.now();
+        const isEnabled = u.enabled;
+        
+        let statusBadge = '';
+        
+        if (!u.expiry) {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-border-light dark:border-border-dark bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-slate-400">未激活</span>';
+        } else if (isExpired) {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-border-light dark:border-border-dark bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-slate-400">已过期</span>';
+        } else if (!isEnabled) {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">已禁用</span>';
+        } else {
+          statusBadge = '<span class="inline-flex items-center rounded-full border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950 px-2.5 py-0.5 text-xs font-semibold text-green-600 dark:text-green-400">正常</span>';
+        }
+        
+        const expiryTime = u.expiry 
+          ? new Date(u.expiry).toLocaleString('zh-CN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }).replace(/\\//g, '-')
+          : '未激活';
+        
+        const createTime = u.createAt 
+          ? new Date(u.createAt).toLocaleString('zh-CN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }).replace(/\\//g, '-')
+          : '-';
+        
+        const row = '<tr class="hover:bg-slate-50/50 dark:hover:bg-zinc-900/50 transition-colors">' +
+          '<td class="p-4 align-middle">' +
+            '<input type="checkbox" class="u-check rounded border-slate-300 dark:border-zinc-700 text-primary focus:ring-primary cursor-pointer" value="'+ u.uuid +'" onchange="updateBatchBar()" data-name="'+ (u.name || '') +'"/>' +
+          '</td>' +
+          '<td class="p-4 align-middle font-mono text-[13px] text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onclick="copyToClipboard(\\'' + u.uuid + '\\')" title="点击复制">'+ u.uuid +'</td>' +
+          '<td class="p-4 align-middle">'+ (u.name || '-') +'</td>' +
+          '<td class="p-4 align-middle text-muted-light">'+ createTime +'</td>' +
+          '<td class="p-4 align-middle text-muted-light">'+ expiryTime +'</td>' +
+          '<td class="p-4 align-middle">'+ statusBadge +'</td>' +
+          '<td class="p-4 align-middle text-right">' +
+            '<div class="relative inline-block">' +
+              '<button id="menu-btn-' + u.uuid + '" onclick="toggleUserMenu(\\'' + u.uuid + '\\')" class="user-menu-btn h-8 w-8 inline-flex items-center justify-center rounded-md border border-border-light dark:border-border-dark hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">' +
+                '<span class="material-symbols-outlined text-sm">more_horiz</span>' +
+              '</button>' +
+              '<div id="menu-'+ u.uuid +'" class="user-menu hidden absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-border-light dark:border-border-dark rounded-md shadow-lg z-50">' +
+                '<div class="py-1">' +
+                  '<button onclick="showSubLinkModal(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">link</span>订阅链接' +
+                  '</button>' +
+                  '<button onclick="openEditUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">edit</span>编辑' +
+                  '</button>' +
+                  (isEnabled && !isExpired ? 
+                    '<button onclick="toggleUserStatus(\\'' + u.uuid + '\\',false)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">block</span>禁用' +
+                    '</button>' :
+                    (!isEnabled && !isExpired ? 
+                      '<button onclick="toggleUserStatus(\\'' + u.uuid + '\\',true)" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                        '<span class="material-symbols-outlined text-sm">check_circle</span>启用' +
+                      '</button>' : '')
+                  ) +
+                  (!isExpired ? 
+                    '<button onclick="openRenewUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                      '<span class="material-symbols-outlined text-sm">schedule</span>续期' +
+                    '</button>' : ''
+                  ) +
+                  '<button onclick="confirmResetUUID(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">refresh</span>重置UUID' +
+                  '</button>' +
+                  '<div class="border-t border-border-light dark:border-border-dark"></div>' +
+                  '<button onclick="deleteUser(\\'' + u.uuid + '\\')" class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2">' +
+                    '<span class="material-symbols-outlined text-sm">delete</span>删除' +
+                  '</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+        
+        tbody.innerHTML += row;
+      });
+      
+      renderPagination();
+      
+      // 保存过滤后的数据用于分页
+      window.filteredUsersData = filteredUsers;
     }
     
     // 确认重置UUID
@@ -2002,6 +2654,12 @@ function renderAdminPanel() {
         subUrlConfig = window.location.origin;
       }
       
+      // 如果有多个用逗号分隔的URL，随机选择一个
+      if (subUrlConfig.includes(',')) {
+        const urls = subUrlConfig.split(',').map(u => u.trim()).filter(u => u);
+        subUrlConfig = urls[Math.floor(Math.random() * urls.length)];
+      }
+      
       // 确保 URL 有 https:// 前缀
       let normalizedSubUrl = subUrlConfig.trim();
       if (!normalizedSubUrl.startsWith('http://') && !normalizedSubUrl.startsWith('https://')) {
@@ -2207,6 +2865,8 @@ function renderAdminPanel() {
         const data = await response.json();
         if (data.success) {
           allPlans = data.plans || [];
+          // 按 sort_order 排序
+          allPlans.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
           renderPlansList();
         } else {
           showAlert('加载套餐失败: ' + (data.error || '未知错误'), 'error');
@@ -2215,6 +2875,87 @@ function renderAdminPanel() {
         console.error('加载套餐失败:', error);
         showAlert('加载套餐失败: ' + error.message, 'error');
       }
+    }
+    
+    let draggedPlanRow = null;
+    
+    function handlePlanDragStart(e) {
+      draggedPlanRow = e.target.closest('tr');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', draggedPlanRow.innerHTML);
+      draggedPlanRow.classList.add('opacity-50');
+    }
+    
+    function handlePlanDragOver(e) {
+      if (e.preventDefault) e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      const targetRow = e.target.closest('tr');
+      if (targetRow && targetRow !== draggedPlanRow && targetRow.hasAttribute('draggable')) {
+        const tbody = targetRow.parentNode;
+        const allRows = [...tbody.querySelectorAll('tr[draggable="true"]')];
+        const draggedIndex = allRows.indexOf(draggedPlanRow);
+        const targetIndex = allRows.indexOf(targetRow);
+        
+        if (draggedIndex < targetIndex) {
+          tbody.insertBefore(draggedPlanRow, targetRow.nextSibling);
+        } else {
+          tbody.insertBefore(draggedPlanRow, targetRow);
+        }
+      }
+      return false;
+    }
+    
+    function handlePlanDrop(e) {
+      if (e.stopPropagation) e.stopPropagation();
+      return false;
+    }
+    
+    async function handlePlanDragEnd(e) {
+      if (!draggedPlanRow) return;
+      
+      draggedPlanRow.classList.remove('opacity-50');
+      
+      // 获取新的顺序
+      const tbody = e.target.closest('tbody');
+      if (!tbody) {
+        draggedPlanRow = null;
+        return;
+      }
+      
+      const rows = [...tbody.querySelectorAll('tr[data-plan-id]')];
+      const newOrder = rows.map((row, index) => ({
+        id: parseInt(row.getAttribute('data-plan-id')),
+        sort_order: index
+      }));
+      
+      // 保存新顺序到服务器
+      try {
+        const response = await fetch('/api/admin/plans/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orders: newOrder })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          showAlert('排序已保存', 'success');
+          // 更新本地数据
+          newOrder.forEach(item => {
+            const plan = allPlans.find(p => p.id === item.id);
+            if (plan) plan.sort_order = item.sort_order;
+          });
+        } else {
+          showAlert('保存排序失败: ' + (data.error || '未知错误'), 'error');
+          await loadAllPlans(); // 重新加载
+        }
+      } catch (error) {
+        console.error('保存排序失败:', error);
+        showAlert('保存排序失败', 'error');
+        await loadAllPlans(); // 重新加载
+      }
+      
+      draggedPlanRow = null;
     }
     
     function renderPlansList() {
@@ -2236,7 +2977,10 @@ function renderAdminPanel() {
         const toggleIcon = plan.enabled ? 'toggle_on' : 'toggle_off';
         const rowOpacity = plan.enabled ? '' : ' opacity-60';
         
-        html += '<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors' + rowOpacity + '" data-plan-name="' + plan.name.toLowerCase() + '">' +
+        html += '<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors' + rowOpacity + ' cursor-move" draggable="true" data-plan-id="' + plan.id + '" data-plan-name="' + plan.name.toLowerCase() + '" ondragstart="handlePlanDragStart(event)" ondragover="handlePlanDragOver(event)" ondrop="handlePlanDrop(event)" ondragend="handlePlanDragEnd(event)">' +
+          '<td class="px-3 py-4 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing">' +
+            '<span class="material-symbols-outlined text-[18px]">drag_indicator</span>' +
+          '</td>' +
           '<td class="px-6 py-4 font-medium">' + plan.name + '</td>' +
           '<td class="px-6 py-4 text-slate-500">' + plan.duration_days + '天</td>' +
           '<td class="px-6 py-4">¥' + parseFloat(plan.price).toFixed(2) + '</td>' +
@@ -2465,17 +3209,28 @@ function renderAdminPanel() {
     
     // ========== 订单管理功能 ==========
     let allOrders = [];
+    let ordersPagination = {
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 0
+    };
     
-    async function loadAllOrders() {
+    async function loadAllOrders(page = 1) {
       try {
-        const status = document.getElementById('order-status-filter').value;
-        const response = await fetch('/api/admin/orders?status=' + status);
+        const statusFilter = document.getElementById('order-status-filter');
+        const status = statusFilter ? statusFilter.value : 'all';
+        const pageSize = ordersPagination ? ordersPagination.pageSize : 20;
+        const response = await fetch('/api/admin/orders?status=' + status + '&page=' + page + '&pageSize=' + pageSize);
         if (!response.ok) throw new Error('Failed to fetch orders');
         
         const data = await response.json();
         if (data.success) {
           allOrders = data.orders || [];
+          // 使用 Object.assign 更新而不是重新赋值
+          Object.assign(ordersPagination, data.pagination || { page: 1, pageSize: 20, total: 0, totalPages: 0 });
           renderOrdersList();
+          renderOrdersPagination();
         } else {
           showAlert('加载订单失败: ' + (data.error || '未知错误'), 'error');
         }
@@ -2540,7 +3295,89 @@ function renderAdminPanel() {
       });
       
       tbody.innerHTML = html;
-      countSpan.textContent = '共 ' + allOrders.length + ' 条订单';
+      countSpan.textContent = '共 ' + ordersPagination.total + ' 条订单，当前第 ' + ordersPagination.page + '/' + ordersPagination.totalPages + ' 页';
+    }
+    
+    function renderOrdersPagination() {
+      const paginationContainer = document.getElementById('orders-pagination');
+      if (!paginationContainer) return;
+      
+      const { page, totalPages } = ordersPagination;
+      
+      if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+      }
+      
+      let html = '<div class="flex flex-col sm:flex-row items-center justify-between gap-3">';
+      html += '<div class="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">';
+      
+      // 上一页按钮
+      html += '<button onclick="loadAllOrders(' + (page - 1) + ')" ' + 
+        (page <= 1 ? 'disabled' : '') + 
+        ' class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">' +
+        '<span class="material-symbols-outlined text-sm">chevron_left</span>' +
+        '</button>';
+      
+      // 页码按钮 - 移动端显示更少的页码
+      const isMobile = window.innerWidth < 640;
+      const maxVisible = isMobile ? 3 : 7;
+      let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+      
+      if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+      }
+      
+      if (startPage > 1) {
+        html += '<button onclick="loadAllOrders(1)" class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">1</button>';
+        if (startPage > 2) {
+          html += '<span class="px-1 sm:px-2 text-slate-400">...</span>';
+        }
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        html += '<button onclick="loadAllOrders(' + i + ')" class="px-2 sm:px-3 py-1.5 text-sm border rounded transition-colors ' + 
+          (i === page 
+            ? 'bg-primary text-white border-primary' 
+            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800') + 
+          '">' + i + '</button>';
+      }
+      
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          html += '<span class="px-1 sm:px-2 text-slate-400">...</span>';
+        }
+        html += '<button onclick="loadAllOrders(' + totalPages + ')" class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">' + totalPages + '</button>';
+      }
+      
+      // 下一页按钮
+      html += '<button onclick="loadAllOrders(' + (page + 1) + ')" ' + 
+        (page >= totalPages ? 'disabled' : '') + 
+        ' class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">' +
+        '<span class="material-symbols-outlined text-sm">chevron_right</span>' +
+        '</button>';
+      
+      html += '</div>';
+      
+      // 页面大小选择器
+      html += '<div class="flex items-center gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">';
+      html += '<span class="hidden sm:inline">每页</span>';
+      html += '<select onchange="changeOrdersPageSize(this.value)" class="px-2 py-1 text-xs sm:text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">';
+      [10, 20, 50, 100].forEach(size => {
+        html += '<option value="' + size + '"' + (ordersPagination.pageSize === size ? ' selected' : '') + '>' + size + '</option>';
+      });
+      html += '</select>';
+      html += '<span class="hidden sm:inline">条</span>';
+      html += '</div>';
+      
+      html += '</div>';
+      paginationContainer.innerHTML = html;
+    }
+    
+    function changeOrdersPageSize(newSize) {
+      ordersPagination.pageSize = parseInt(newSize);
+      loadAllOrders(1);
     }
     
     function getOrderStatusConfig(status) {
@@ -2584,7 +3421,12 @@ function renderAdminPanel() {
         }
       });
       
-      document.getElementById('orders-count').textContent = '共 ' + visibleCount + ' 条订单';
+      // 如果在搜索，显示过滤后的数量，否则显示分页信息
+      if (searchTerm) {
+        document.getElementById('orders-count').textContent = '找到 ' + visibleCount + ' 条订单';
+      } else {
+        document.getElementById('orders-count').textContent = '共 ' + ordersPagination.total + ' 条订单，当前第 ' + ordersPagination.page + '/' + ordersPagination.totalPages + ' 页';
+      }
     }
     
     function toggleAllOrderChecks() {
@@ -2746,7 +3588,7 @@ function renderAdminPanel() {
       
       const statusConfig = getOrderStatusConfig(order.status);
       const createdTime = order.created_at ? new Date(order.created_at).toLocaleString('zh-CN') : '-';
-      const processedTime = order.processed_at ? new Date(order.processed_at).toLocaleString('zh-CN') : '-';
+      const paidTime = order.paid_at ? new Date(order.paid_at).toLocaleString('zh-CN') : '-';
       
       const bodyHtml = '<div class="space-y-4">' +
         '<div class="grid grid-cols-2 gap-4">' +
@@ -2764,7 +3606,7 @@ function renderAdminPanel() {
         '</div>' +
         '<div class="space-y-2">' +
           '<label class="text-xs font-medium text-slate-500">用户UUID</label>' +
-          '<div class="text-sm font-mono">' + order.uuid + '</div>' +
+          '<div class="text-sm font-mono">' + (order.uuid || '-') + '</div>' +
         '</div>' +
         '<div class="space-y-2">' +
           '<label class="text-xs font-medium text-slate-500">套餐</label>' +
@@ -2781,7 +3623,7 @@ function renderAdminPanel() {
           '</div>' +
           '<div class="space-y-2">' +
             '<label class="text-xs font-medium text-slate-500">处理时间</label>' +
-            '<div class="text-sm text-slate-600 dark:text-slate-400">' + processedTime + '</div>' +
+            '<div class="text-sm text-slate-600 dark:text-slate-400">' + paidTime + '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -3706,6 +4548,13 @@ function renderAdminPanel() {
         
         const data = await response.json();
         let domains = data.bestDomains || [];
+        const lastCronSyncTime = data.lastCronSyncTime || Date.now();
+        
+        // 计算距离下次执行的剩余秒数
+        const elapsed = Math.floor((Date.now() - lastCronSyncTime) / 1000);
+        const interval = 15 * 60; // 15分钟
+        nextSyncSeconds = interval - (elapsed % interval);
+        if (nextSyncSeconds <= 0) nextSyncSeconds = interval;
         
         // 排序：IPv4在前，IPv6在后
         domains.sort((a, b) => {
@@ -3731,16 +4580,38 @@ function renderAdminPanel() {
       document.getElementById('best-domains-count').textContent = '共 ' + currentBestDomains.length + ' 个条目';
       
       if (currentBestDomains.length === 0) {
-        listContainer.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span><p class="text-sm">暂无优选域名</p></td></tr>';
+        listContainer.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span><p class="text-sm">暂无优选域名</p></td></tr>';
         return;
       }
       
       let html = '';
       currentBestDomains.forEach((domain, index) => {
+        // 检测IP类型和标签
+        const isIPv6 = domain.includes('[');
+        const typeClass = isIPv6 ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+        const typeText = isIPv6 ? 'IPv6' : 'IPv4';
+        
+        // 提取标签（#后的内容）
+        let label = '';
+        if (domain.includes('#')) {
+          label = domain.split('#')[1] || '';
+        }
+        
         html += '<tr class="group hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-colors" draggable="true" data-index="' + index + '" ondragstart="handleDragStart(event)" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragend="handleDragEnd(event)">' +
           '<td class="px-4 py-3"><span class="material-symbols-outlined text-slate-300 dark:text-zinc-600 text-[18px] cursor-move">drag_indicator</span></td>' +
-          '<td class="px-4 py-3 font-mono text-slate-700 dark:text-zinc-300">' + domain + '</td>' +
-          '<td class="px-4 py-3"><span class="inline-block w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-600"></span></td>' +
+          '<td class="px-4 py-3">' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="px-2 py-0.5 text-[11px] font-medium rounded ' + typeClass + '">' + typeText + '</span>' +
+              '<span class="font-mono text-slate-700 dark:text-zinc-300">' + domain + '</span>' +
+            '</div>' +
+            (label ? '<div class="mt-1 text-xs text-slate-500 dark:text-zinc-500">📍 ' + label + '</div>' : '') +
+          '</td>' +
+          '<td class="px-4 py-3">' +
+            '<div class="flex items-center gap-1.5">' +
+              '<span class="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>' +
+              '<span class="text-xs text-slate-500 dark:text-zinc-500">在线</span>' +
+            '</div>' +
+          '</td>' +
           '<td class="px-4 py-3 text-right">' +
             '<button onclick="deleteBestDomain(' + index + ')" class="text-slate-400 hover:text-red-500 transition-colors">' +
               '<span class="material-symbols-outlined text-[18px]">close</span>' +
@@ -3826,47 +4697,66 @@ function renderAdminPanel() {
     }
     
     async function fetchIPv4BestDomains() {
-      const confirmed = await showConfirm('确定要从远程获取 IPv4 优选域名吗？\\n\\n⚠️ 这将替换当前列表！', '获取IPv4优选');
+      const confirmed = await showConfirm('确定要从远程获取 IPv4 优选域名吗？\\n\\n⚠️ 这将追加到当前列表！', '获取IPv4优选');
       if (!confirmed) return;
       
       try {
         showAlert('正在获取 IPv4 优选域名，请稍候...', 'info');
         
-        // 这里可以对接后端的获取优选IP接口
-        // 暂时模拟数据
-        const mockDomains = [
-          'cf.twitter.now.cc',
-          'telecom.twitter.now.cc', 
-          'unicom.twitter.now.cc',
-          '104.19.238.63:443#移动 LHR',
-          '104.18.34.121:443#移动 LHR'
-        ];
+        const response = await fetch('/api/admin/fetch-best-ips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'v4' })
+        });
         
-        currentBestDomains = mockDomains;
-        renderBestDomainsList();
-        showAlert('已获取 ' + mockDomains.length + ' 个 IPv4 优选域名', 'success');
+        const result = await response.json();
+        
+        if (result.success) {
+          // 追加而不是替换，避免删除手动添加的域名
+          const newDomains = result.domains || [];
+          newDomains.forEach(domain => {
+            if (!currentBestDomains.includes(domain)) {
+              currentBestDomains.push(domain);
+            }
+          });
+          renderBestDomainsList();
+          showAlert('已获取 ' + newDomains.length + ' 个 IPv4 优选域名', 'success');
+        } else {
+          showAlert('获取失败: ' + (result.error || '未知错误'), 'error');
+        }
       } catch (error) {
         showAlert('获取失败: ' + error.message, 'error');
       }
     }
     
     async function fetchIPv6BestDomains() {
-      const confirmed = await showConfirm('确定要从远程获取 IPv6 优选域名吗？\\n\\n⚠️ 这将替换当前列表！', '获取IPv6优选');
+      const confirmed = await showConfirm('确定要从远程获取 IPv6 优选域名吗？\\n\\n⚠️ 这将追加到当前列表！', '获取IPv6优选');
       if (!confirmed) return;
       
       try {
         showAlert('正在获取 IPv6 优选域名，请稍候...', 'info');
         
-        // 这里可以对接后端的获取优选IP接口
-        // 暂时模拟数据
-        const mockDomains = [
-          '[2606:4700:7::a29f:8601]:443#美国',
-          '[2606:4700:7::a29f:8602]:443#欧洲'
-        ];
+        const response = await fetch('/api/admin/fetch-best-ips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'v6' })
+        });
         
-        currentBestDomains = mockDomains;
-        renderBestDomainsList();
-        showAlert('已获取 ' + mockDomains.length + ' 个 IPv6 优选域名', 'success');
+        const result = await response.json();
+        
+        if (result.success) {
+          // 追加而不是替换，避免删除手动添加的域名
+          const newDomains = result.domains || [];
+          newDomains.forEach(domain => {
+            if (!currentBestDomains.includes(domain)) {
+              currentBestDomains.push(domain);
+            }
+          });
+          renderBestDomainsList();
+          showAlert('已获取 ' + newDomains.length + ' 个 IPv6 优选域名', 'success');
+        } else {
+          showAlert('获取失败: ' + (result.error || '未知错误'), 'error');
+        }
       } catch (error) {
         showAlert('获取失败: ' + error.message, 'error');
       }
@@ -3948,38 +4838,26 @@ function renderAdminPanel() {
           return;
         }
         
-        // 解析优选域名列表
-        // 格式1: 域名 cf.twitter.now.cc
-        // 格式2: IPv4 104.18.34.78:443#v4移动 LHR
-        // 格式3: IPv6 [2606:4700:7::a29f:8601]:443#v6移动 MAA
         const nodes = [];
         for (let i = 0; i < currentBestDomains.length; i++) {
           const domain = currentBestDomains[i];
           const parsed = parseDomainEntry(domain);
           if (parsed) {
-            // 测试延迟（模拟）
-            const latency = await testNodeLatency(parsed.address, parsed.port);
-            
             // 构建节点地址显示
             let nodeAddress;
             if (parsed.isDomain) {
-              // 域名: cf.twitter.now.cc:443
               nodeAddress = parsed.address + ':' + parsed.port;
             } else if (parsed.address.includes(':')) {
-              // IPv6: [2606:4700:7::a29f:8601]:443
               nodeAddress = '[' + parsed.address + ']:' + parsed.port;
             } else {
-              // IPv4: 104.18.34.78:443
               nodeAddress = parsed.address + ':' + parsed.port;
             }
             
             nodes.push({
               id: i + 1,
-              name: parsed.label,
+              name: parsed.label + (parsed.region ? ' ' + parsed.region : ''),
               node: nodeAddress,
-              latency: latency,
-              region: parsed.region || '-',
-              status: latency > 0 && latency < 3000 ? '在线' : '超时'
+              status: '在线'
             });
           }
         }
@@ -4073,24 +4951,12 @@ function renderAdminPanel() {
       }
     }
     
-    // 测试节点延迟（模拟）
-    async function testNodeLatency(ip, port) {
-      // 实际环境中可以ping或fetch测试
-      // 这里返回模拟延迟
-      return new Promise(resolve => {
-        setTimeout(() => {
-          const randomLatency = Math.floor(Math.random() * 1500) + 500;
-          resolve(randomLatency);
-        }, 100);
-      });
-    }
-    
     // 渲染节点状态列表
     function renderNodeStatus(nodes) {
       const tbody = document.getElementById('node-status-list');
       
       if (nodes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span><p class="text-sm">暂无节点状态数据</p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400 dark:text-zinc-600"><span class="material-symbols-outlined text-4xl mb-2 block">cloud_off</span><p class="text-sm">暂无节点状态数据</p></td></tr>';
         return;
       }
       
@@ -4103,7 +4969,6 @@ function renderAdminPanel() {
           '<td class="px-4 py-3 text-slate-500 dark:text-zinc-500 text-center">' + node.id + '</td>' +
           '<td class="px-4 py-3 font-medium text-slate-900 dark:text-zinc-100">' + node.name + '</td>' +
           '<td class="px-4 py-3 font-mono text-slate-600 dark:text-zinc-400">' + node.node + '</td>' +
-          '<td class="px-4 py-3 font-mono text-slate-600 dark:text-zinc-400">' + node.latency + 'ms</td>' +
           '<td class="px-4 py-3 text-right">' +
             '<span class="inline-flex items-center rounded-full border ' + statusClass + ' px-2 py-0.5 text-xs font-medium">' + node.status + '</span>' +
           '</td>' +
@@ -4141,6 +5006,7 @@ function renderAdminPanel() {
           
           document.getElementById('input-enableTrial').checked = settings.enableTrial || false;
           document.getElementById('input-trialDays').value = settings.trialDays || 1;
+          document.getElementById('input-autoApproveOrder').checked = settings.autoApproveOrder || false;
           document.getElementById('input-requireInviteCode').checked = settings.requireInviteCode || false;
           document.getElementById('input-pendingOrderExpiry').value = settings.pendingOrderExpiry || 30;
           document.getElementById('input-paymentOrderExpiry').value = settings.paymentOrderExpiry || 15;
@@ -4157,6 +5023,11 @@ function renderAdminPanel() {
           }
           if (document.getElementById('input-autoCleanupDays')) {
             document.getElementById('input-autoCleanupDays').value = settings.autoCleanupDays || 7;
+          }
+          
+          // 加载 API 密钥配置
+          if (document.getElementById('input-apiToken')) {
+            document.getElementById('input-apiToken').value = settings.apiToken || '';
           }
           
           // 加载仪表盘快捷操作开关
@@ -4176,6 +5047,7 @@ function renderAdminPanel() {
         const settings = {
           enableTrial: document.getElementById('input-enableTrial').checked,
           trialDays: parseInt(document.getElementById('input-trialDays').value),
+          autoApproveOrder: document.getElementById('input-autoApproveOrder').checked,
           requireInviteCode: document.getElementById('input-requireInviteCode').checked,
           pendingOrderExpiry: parseInt(document.getElementById('input-pendingOrderExpiry').value),
           paymentOrderExpiry: parseInt(document.getElementById('input-paymentOrderExpiry').value)
@@ -4198,6 +5070,10 @@ function renderAdminPanel() {
         
         if (autoCleanupEnabled) settings.autoCleanupEnabled = autoCleanupEnabled.checked;
         if (autoCleanupDays) settings.autoCleanupDays = parseInt(autoCleanupDays.value);
+        
+        // 添加 API 密钥配置
+        const apiToken = document.getElementById('input-apiToken');
+        if (apiToken) settings.apiToken = apiToken.value.trim();
         
         const response = await fetch('/api/admin/updateSystemSettings', {
           method: 'POST',
@@ -4273,6 +5149,15 @@ function renderAdminPanel() {
     async function adminLogout() {
       await fetch('/api/admin/logout', {method: 'POST'});
       location.reload();
+    }
+    
+    // 生成 API 密钥
+    function generateApiToken() {
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      document.getElementById('input-apiToken').value = token;
+      showToast('✅ 已生成新的 API 密钥，请记得保存设置');
     }
     
     // 更新时间显示
@@ -4453,6 +5338,15 @@ function renderAdminPanel() {
       }
     }
     
+    // 侧边栏切换（移动端）
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      
+      sidebar.classList.toggle('mobile-open');
+      overlay.classList.toggle('active');
+    }
+    
     // Toast 提示
     function showToast(message) {
       const toast = document.createElement('div');
@@ -4476,6 +5370,15 @@ function renderAdminPanel() {
       const firstNavLink = document.querySelector('.nav-link');
       if (firstNavLink) {
         firstNavLink.classList.add('bg-zinc-100', 'dark:bg-zinc-800', 'text-primary', 'dark:text-white', 'font-medium');
+      }
+      
+      // 页面加载时恢复上次浏览的section
+      const lastSection = localStorage.getItem('currentSection');
+      if (lastSection && lastSection !== 'dashboard') {
+        switchSection(lastSection, true);
+      } else {
+        // 默认加载用户列表
+        loadAllUsers();
       }
     });
   </script>

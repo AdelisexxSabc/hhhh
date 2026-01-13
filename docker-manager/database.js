@@ -39,6 +39,8 @@ function initDatabase() {
             created_at INTEGER NOT NULL,
             last_login INTEGER NOT NULL,
             last_checkin INTEGER DEFAULT 0,
+            checkin_streak INTEGER DEFAULT 0,
+            total_checkin_days INTEGER DEFAULT 0,
             auto_approve_version INTEGER DEFAULT 0,
             FOREIGN KEY (uuid) REFERENCES users(uuid) ON DELETE CASCADE
         );
@@ -69,7 +71,8 @@ function initDatabase() {
             duration_days INTEGER NOT NULL,
             price REAL NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 1,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            sort_order INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS orders (
@@ -134,6 +137,39 @@ function initDatabase() {
             console.log('[数据库迁移] ✅ last_checkin 字段添加成功');
         }
         
+        const hasCheckinStreak = tableInfo.some(col => col.name === 'checkin_streak');
+        if (!hasCheckinStreak) {
+            console.log('[数据库迁移] 添加 checkin_streak 字段...');
+            db.exec('ALTER TABLE user_accounts ADD COLUMN checkin_streak INTEGER DEFAULT 0');
+            console.log('[数据库迁移] ✅ checkin_streak 字段添加成功');
+        }
+        
+        const hasTotalCheckinDays = tableInfo.some(col => col.name === 'total_checkin_days');
+        if (!hasTotalCheckinDays) {
+            console.log('[数据库迁移] 添加 total_checkin_days 字段...');
+            db.exec('ALTER TABLE user_accounts ADD COLUMN total_checkin_days INTEGER DEFAULT 0');
+            console.log('[数据库迁移] ✅ total_checkin_days 字段添加成功');
+        }
+        
+        // 修复现有用户的 NULL 值
+        console.log('[数据库迁移] 修复签到字段的 NULL 值...');
+        db.exec(`
+            UPDATE user_accounts 
+            SET last_checkin = 0 
+            WHERE last_checkin IS NULL
+        `);
+        db.exec(`
+            UPDATE user_accounts 
+            SET checkin_streak = 0 
+            WHERE checkin_streak IS NULL
+        `);
+        db.exec(`
+            UPDATE user_accounts 
+            SET total_checkin_days = 0 
+            WHERE total_checkin_days IS NULL
+        `);
+        console.log('[数据库迁移] ✅ NULL 值修复完成');
+        
         const hasAutoApproveVersion = tableInfo.some(col => col.name === 'auto_approve_version');
         if (!hasAutoApproveVersion) {
             console.log('[数据库迁移] 添加 auto_approve_version 字段...');
@@ -149,6 +185,22 @@ function initDatabase() {
             console.log('[数据库迁移] 添加 callback_url 字段到 payment_channels 表...');
             db.exec('ALTER TABLE payment_channels ADD COLUMN callback_url TEXT');
             console.log('[数据库迁移] ✅ callback_url 字段添加成功');
+        }
+    } catch (e) {
+        console.error('[数据库迁移] 错误:', e.message);
+    }
+    
+    // 迁移：为 subscription_plans 表添加 sort_order 字段
+    try {
+        const checkColumn = db.prepare("PRAGMA table_info(subscription_plans)").all();
+        const hasSortOrder = checkColumn.some(col => col.name === 'sort_order');
+        
+        if (!hasSortOrder) {
+            console.log('[数据库迁移] 添加 sort_order 字段到 subscription_plans 表...');
+            db.exec('ALTER TABLE subscription_plans ADD COLUMN sort_order INTEGER DEFAULT 0');
+            // 为现有套餐设置排序值（按ID升序）
+            db.exec('UPDATE subscription_plans SET sort_order = id WHERE sort_order = 0 OR sort_order IS NULL');
+            console.log('[数据库迁移] ✅ sort_order 字段添加成功');
         }
     } catch (e) {
         console.error('[数据库迁移] 错误:', e.message);
@@ -278,7 +330,20 @@ function createUserAccount(username, passwordHash, email, uuid) {
 // 根据用户名获取用户账号
 function getUserByUsername(username) {
     const stmt = getDb().prepare("SELECT * FROM user_accounts WHERE username = ?");
-    return stmt.get(username);
+    const user = stmt.get(username);
+    if (user) {
+        // 确保签到相关字段存在并有默认值
+        if (user.last_checkin === undefined || user.last_checkin === null) {
+            user.last_checkin = 0;
+        }
+        if (user.checkin_streak === undefined || user.checkin_streak === null) {
+            user.checkin_streak = 0;
+        }
+        if (user.total_checkin_days === undefined || user.total_checkin_days === null) {
+            user.total_checkin_days = 0;
+        }
+    }
+    return user;
 }
 
 // 根据ID获取用户账号
@@ -286,9 +351,15 @@ function getUserById(userId) {
     const stmt = getDb().prepare("SELECT * FROM user_accounts WHERE id = ?");
     const user = stmt.get(userId);
     if (user) {
-        // 确保last_checkin字段存在
-        if (user.last_checkin === undefined) {
+        // 确保签到相关字段存在并有默认值
+        if (user.last_checkin === undefined || user.last_checkin === null) {
             user.last_checkin = 0;
+        }
+        if (user.checkin_streak === undefined || user.checkin_streak === null) {
+            user.checkin_streak = 0;
+        }
+        if (user.total_checkin_days === undefined || user.total_checkin_days === null) {
+            user.total_checkin_days = 0;
         }
     }
     return user;
@@ -322,6 +393,18 @@ function updateLastLogin(userId) {
 function updateLastCheckin(userId, timestamp) {
     const stmt = getDb().prepare("UPDATE user_accounts SET last_checkin = ? WHERE id = ?");
     return stmt.run(timestamp, userId);
+}
+
+// 更新签到统计（连续签到和累计签到）
+function updateCheckinStats(userId, streak, totalDays) {
+    const stmt = getDb().prepare("UPDATE user_accounts SET checkin_streak = ?, total_checkin_days = ? WHERE id = ?");
+    return stmt.run(streak, totalDays, userId);
+}
+
+// 更新用户的自动审核版本号
+function updateUserAutoApproveVersion(userId, version) {
+    const stmt = getDb().prepare("UPDATE user_accounts SET auto_approve_version = ? WHERE id = ?");
+    return stmt.run(version, userId);
 }
 
 // 更新用户密码
@@ -404,8 +487,8 @@ function saveSettings(settings) {
 // 获取所有套餐
 function getAllPlans(includeDisabled = false) {
     const sql = includeDisabled 
-        ? "SELECT * FROM subscription_plans ORDER BY created_at DESC"
-        : "SELECT * FROM subscription_plans WHERE enabled = 1 ORDER BY created_at DESC";
+        ? "SELECT * FROM subscription_plans ORDER BY sort_order ASC, id ASC"
+        : "SELECT * FROM subscription_plans WHERE enabled = 1 ORDER BY sort_order ASC, id ASC";
     const stmt = getDb().prepare(sql);
     return stmt.all();
 }
@@ -440,39 +523,101 @@ function togglePlan(id) {
 
 // 删除套餐
 function deletePlan(id) {
-    const stmt = getDb().prepare("DELETE FROM subscription_plans WHERE id = ?");
-    return stmt.run(id);
+    const db = getDb();
+    // 暂时禁用外键约束
+    db.prepare("PRAGMA foreign_keys = OFF").run();
+    try {
+        const stmt = db.prepare("DELETE FROM subscription_plans WHERE id = ?");
+        const result = stmt.run(id);
+        return result;
+    } finally {
+        // 恢复外键约束
+        db.prepare("PRAGMA foreign_keys = ON").run();
+    }
+}
+
+// 更新套餐排序
+function updatePlansSortOrder(orders) {
+    const db = getDb();
+    const stmt = db.prepare('UPDATE subscription_plans SET sort_order = ? WHERE id = ?');
+    const transaction = db.transaction((orders) => {
+        for (const order of orders) {
+            stmt.run(order.sort_order, order.id);
+        }
+    });
+    transaction(orders);
 }
 
 // --- 订单相关操作 ---
 
-// 获取订单列表
-function getOrders(status = 'all', limit = 100) {
+// 获取订单列表（支持分页）
+function getOrders(status = 'all', limit = 100, offset = 0) {
     let sql = `
-        SELECT o.*, p.name as plan_name, p.duration_days, ua.username 
+        SELECT o.*, 
+               COALESCE(p.name, '已删除套餐') as plan_name, 
+               COALESCE(p.duration_days, 0) as duration_days, 
+               COALESCE(p.price, o.amount) as price, 
+               ua.username, ua.uuid 
         FROM orders o 
-        JOIN subscription_plans p ON o.plan_id = p.id 
+        LEFT JOIN subscription_plans p ON o.plan_id = p.id 
         JOIN user_accounts ua ON o.user_id = ua.id
     `;
     if (status !== 'all') {
         sql += ` WHERE o.status = ?`;
     }
-    sql += ` ORDER BY o.created_at DESC LIMIT ?`;
+    sql += ` ORDER BY o.created_at DESC LIMIT ? OFFSET ?`;
     
     const stmt = getDb().prepare(sql);
-    return status !== 'all' ? stmt.all(status, limit) : stmt.all(limit);
+    return status !== 'all' ? stmt.all(status, limit, offset) : stmt.all(limit, offset);
+}
+
+// 获取订单总数
+function getOrdersCount(status = 'all') {
+    let sql = 'SELECT COUNT(*) as count FROM orders o';
+    if (status !== 'all') {
+        sql += ' WHERE o.status = ?';
+    }
+    const stmt = getDb().prepare(sql);
+    const result = status !== 'all' ? stmt.get(status) : stmt.get();
+    return result ? result.count : 0;
 }
 
 // 获取用户订单
 function getUserOrders(userId) {
     const stmt = getDb().prepare(`
-        SELECT o.*, p.name as plan_name, p.duration_days 
+        SELECT o.*, 
+               COALESCE(p.name, '已删除套餐') as plan_name, 
+               COALESCE(p.duration_days, 0) as duration_days 
         FROM orders o 
-        JOIN subscription_plans p ON o.plan_id = p.id 
+        LEFT JOIN subscription_plans p ON o.plan_id = p.id 
         WHERE o.user_id = ? 
         ORDER BY o.created_at DESC
     `);
     return stmt.all(userId);
+}
+
+// 获取套餐关联的订单
+function getOrdersByPlanId(planId) {
+    const stmt = getDb().prepare(`
+        SELECT o.* FROM orders o WHERE o.plan_id = ?
+    `);
+    return stmt.all(planId);
+}
+
+// 获取套餐关联的待支付订单
+function getPendingOrdersByPlanId(planId) {
+    const stmt = getDb().prepare(`
+        SELECT o.* FROM orders o WHERE o.plan_id = ? AND o.status = 'pending'
+    `);
+    return stmt.all(planId);
+}
+
+// 解除订单与套餐的关联（用于删除套餐前保留订单历史）
+function unlinkOrdersFromPlan(planId) {
+    const stmt = getDb().prepare(`
+        UPDATE orders SET plan_id = NULL WHERE plan_id = ?
+    `);
+    return stmt.run(planId);
 }
 
 // 创建订单
@@ -510,6 +655,17 @@ function updateOrderStatus(id, status, paidAt = null) {
 function updateUserExpiry(uuid, newExpiry) {
     const stmt = getDb().prepare("UPDATE users SET expiry = ? WHERE uuid = ?");
     return stmt.run(newExpiry, uuid);
+}
+
+// 更新订单支付信息
+function updateOrderPaymentInfo(orderId, paymentOrderId, paymentTradeId) {
+    const stmt = getDb().prepare("UPDATE orders SET payment_order_id = ?, payment_trade_id = ? WHERE id = ?");
+    return stmt.run(paymentOrderId, paymentTradeId, orderId);
+}
+
+// 根据用户ID获取用户账号 (别名方法)
+function getUserByUserId(userId) {
+    return getUserById(userId);
 }
 
 // --- 公告相关操作 ---
@@ -907,6 +1063,8 @@ module.exports = {
     updateUserAccountPassword,
     updateLastLogin,
     updateLastCheckin,
+    updateCheckinStats,
+    updateUserAutoApproveVersion,
     updateUserPassword,
     updateUserPasswordByUUID,
     
@@ -931,11 +1089,18 @@ module.exports = {
     
     // 订单
     getOrders,
+    getOrdersCount,
     getUserOrders,
+    getOrdersByPlanId,
+    getPendingOrdersByPlanId,
+    unlinkOrdersFromPlan,
     createOrder,
     getOrderById,
     updateOrderStatus,
     updateUserExpiry,
+    updateOrderPaymentInfo,
+    getUserByUserId,
+    updatePlansSortOrder,
     
     // 公告
     getAllAnnouncements,

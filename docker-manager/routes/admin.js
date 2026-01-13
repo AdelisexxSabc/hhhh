@@ -3,7 +3,6 @@
  */
 
 const db = require('../database');
-const { fetchBestIPsFromWeb } = require('../server');
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
@@ -310,11 +309,8 @@ function deleteUsers(req, res) {
             
             // 检查是否包含管理员账号
             const adminUser = db.getUserByUsername(ADMIN_USERNAME);
-            if (adminUser) {
-                const adminAccount = db.getUserAccountByUserId(adminUser.id);
-                if (adminAccount && uuidList.includes(adminAccount.uuid)) {
-                    return res.status(403).json({ error: '不能删除管理员账号' });
-                }
+            if (adminUser && uuidList.includes(adminUser.uuid)) {
+                return res.status(403).json({ error: '不能删除管理员账号' });
             }
             
             db.deleteUsers(uuidList);
@@ -324,7 +320,7 @@ function deleteUsers(req, res) {
         
     } catch (e) {
         console.error('删除用户错误:', e);
-        res.status(500).json({ error: '服务器错误' });
+        res.status(500).json({ error: '服务器错误: ' + e.message });
     }
 }
 
@@ -446,6 +442,7 @@ function getSystemSettings(req, res) {
                 subUrl: settings.subUrl || '',
                 websiteUrl: settings.websiteUrl || '',
                 baseUrl: settings.baseUrl || '',
+                apiToken: settings.apiToken || '',
                 proxyIPs: settings.proxyIPs || [],
                 bestDomains: settings.bestDomains || []
             }
@@ -534,7 +531,15 @@ function updateSystemSettings(req, res) {
             currentSettings.enableRegister = body.enableRegister === true || body.enableRegister === 'true';
         }
         if (body.autoApproveOrder !== undefined) {
-            currentSettings.autoApproveOrder = body.autoApproveOrder === true || body.autoApproveOrder === 'true';
+            const newAutoApprove = body.autoApproveOrder === true || body.autoApproveOrder === 'true';
+            const wasAutoApproveDisabled = currentSettings.autoApproveOrder !== true;
+            
+            // 如果从关闭变为开启，递增版本号（重置所有用户的使用次数）
+            if (wasAutoApproveDisabled && newAutoApprove) {
+                currentSettings.autoApproveVersion = (currentSettings.autoApproveVersion || 0) + 1;
+            }
+            
+            currentSettings.autoApproveOrder = newAutoApprove;
         }
         if (body.enableTrial !== undefined) {
             currentSettings.enableTrial = body.enableTrial === true || body.enableTrial === 'true';
@@ -574,6 +579,9 @@ function updateSystemSettings(req, res) {
         }
         if (body.baseUrl !== undefined) {
             currentSettings.baseUrl = body.baseUrl || '';
+        }
+        if (body.apiToken !== undefined) {
+            currentSettings.apiToken = body.apiToken || '';
         }
         
         db.saveSettings(currentSettings);
@@ -682,9 +690,42 @@ function deletePlan(req, res) {
     
     try {
         const { id } = req.body;
-        db.deletePlan(parseInt(id));
+        const planId = parseInt(id);
+        
+        // 只检查待支付订单，已完成的订单不影响删除
+        const pendingOrders = db.getPendingOrdersByPlanId(planId);
+        if (pendingOrders && pendingOrders.length > 0) {
+            return res.status(400).json({ 
+                error: `无法删除：该套餐有 ${pendingOrders.length} 个待支付订单，请先取消这些订单` 
+            });
+        }
+        
+        // 删除套餐（已完成/取消的订单会保留，显示为"已删除套餐"）
+        db.deletePlan(planId);
         res.json({ success: true });
     } catch (e) {
+        console.error('删除套餐错误:', e);
+        res.status(500).json({ error: '服务器错误: ' + e.message });
+    }
+}
+
+function reorderPlans(req, res) {
+    if (!validateAdminSession(req)) {
+        return res.status(401).json({ error: '未授权' });
+    }
+    
+    try {
+        const { orders } = req.body;
+        
+        if (!orders || !Array.isArray(orders)) {
+            return res.status(400).json({ error: '参数错误' });
+        }
+        
+        db.updatePlansSortOrder(orders);
+        res.json({ success: true });
+        
+    } catch (e) {
+        console.error('更新套餐排序错误:', e);
         res.status(500).json({ error: '服务器错误' });
     }
 }
@@ -697,7 +738,13 @@ function getOrders(req, res) {
     }
     
     const status = req.query.status || 'all';
-    let orders = db.getOrders(status);
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 20;
+    const offset = (page - 1) * pageSize;
+    
+    // 获取订单列表和总数
+    let orders = db.getOrders(status, pageSize, offset);
+    const total = db.getOrdersCount(status);
     
     // 检查订单过期时间
     const settings = db.getSettings() || {};
@@ -717,7 +764,16 @@ function getOrders(req, res) {
         return order;
     });
     
-    res.json({ success: true, orders: orders });
+    res.json({ 
+        success: true, 
+        orders: orders,
+        pagination: {
+            page: page,
+            pageSize: pageSize,
+            total: total,
+            totalPages: Math.ceil(total / pageSize)
+        }
+    });
 }
 
 function approveOrder(req, res) {
@@ -929,8 +985,18 @@ function savePaymentChannel(req, res) {
         }
         
         db.createPaymentChannel(name, code, api_url, api_token, callback_url || null);
+        
+        // 同时更新系统配置中的 baseUrl，以便回调地址生效
+        if (callback_url) {
+            const settings = db.getSettings() || {};
+            settings.baseUrl = callback_url;
+            db.saveSettings(settings);
+            console.log('✅ 已同步更新系统 baseUrl:', callback_url);
+        }
+        
         res.json({ success: true });
     } catch (e) {
+        console.error('创建支付通道失败:', e);
         res.status(500).json({ error: '服务器错误' });
     }
 }
@@ -943,8 +1009,18 @@ function updatePaymentChannel(req, res) {
     try {
         const { id, name, code, api_url, api_token, callback_url } = req.body;
         db.updatePaymentChannel(parseInt(id), name, code, api_url, api_token, callback_url || null);
+        
+        // 同时更新系统配置中的 baseUrl，以便回调地址生效
+        if (callback_url) {
+            const settings = db.getSettings() || {};
+            settings.baseUrl = callback_url;
+            db.saveSettings(settings);
+            console.log('✅ 已同步更新系统 baseUrl:', callback_url);
+        }
+        
         res.json({ success: true });
     } catch (e) {
+        console.error('更新支付通道失败:', e);
         res.status(500).json({ error: '服务器错误' });
     }
 }
@@ -1209,7 +1285,9 @@ function saveProxyIPs(req, res) {
 function getBestDomains(req, res) {
     try {
         const bestDomains = db.getBestDomains();
-        res.json({ success: true, bestDomains });
+        const settings = db.getSettings() || {};
+        const lastCronSyncTime = settings.lastCronSyncTime || Date.now();
+        res.json({ success: true, bestDomains, lastCronSyncTime });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1228,6 +1306,57 @@ function saveBestDomains(req, res) {
         res.status(500).json({ error: e.message });
     }
 }
+
+// 获取优选IP
+async function fetchBestIPs(req, res) {
+    try {
+        const { type } = req.body; // 'v4' 或 'v6'
+        
+        if (!type || !['v4', 'v6'].includes(type)) {
+            return res.status(400).json({ error: '无效的IP类型' });
+        }
+        
+        console.log(`🔍 开始获取 ${type} 优选IP...`);
+        
+        // 调用原Worker中的fetchBestIPsFromWeb逻辑
+        const url = type === 'v4' 
+            ? 'https://wetest.vip/page/cloudflare/address_v4.html'
+            : 'https://wetest.vip/page/cloudflare/address_v6.html';
+        
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const html = await response.text();
+        
+        // 解析HTML，提取IP地址
+        const regex = type === 'v4'
+            ? /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:#[^\s<]+)?\b/g
+            : /\[(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\](?::\d+)?(?:#[^\s<]+)?/g;
+        
+        const matches = html.match(regex) || [];
+        const domains = [...new Set(matches)].slice(0, 20); // 去重，取前20个
+        
+        console.log(`✅ 成功获取 ${domains.length} 个 ${type} 优选IP`);
+        
+        res.json({ 
+            success: true, 
+            domains,
+            type,
+            count: domains.length
+        });
+    } catch (e) {
+        console.error('❌ 获取优选IP失败:', e.message);
+        res.status(500).json({ error: '获取失败: ' + e.message });
+    }
+}
+
 
 // ==================== 修改密码 ====================
 async function changeAdminPassword(req, res) {
@@ -1372,6 +1501,7 @@ module.exports = {
     updatePlan,
     togglePlan,
     deletePlan,
+    reorderPlans,
     getOrders,
     approveOrder,
     rejectOrder,
@@ -1396,6 +1526,7 @@ module.exports = {
     saveProxyIPs,
     getBestDomains,
     saveBestDomains,
+    fetchBestIPs,
     changeAdminPassword,
     exportAllData,
     importAllData,

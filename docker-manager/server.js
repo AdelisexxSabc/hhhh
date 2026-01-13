@@ -38,8 +38,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// API 路由 - 供节点端拉取
-app.get('/api/users', apiRoutes.getUsers);
+// API 路由 - 供节点端拉取（需要密钥验证）
+app.get('/api/users', apiRoutes.verifyApiToken, apiRoutes.getUsers);
 
 // 公告 API
 app.get('/api/announcement', apiRoutes.getAnnouncement);
@@ -92,6 +92,7 @@ app.post('/api/admin/plans/create', adminRoutes.createPlan);
 app.post('/api/admin/plans/update', adminRoutes.updatePlan);
 app.post('/api/admin/plans/toggle', adminRoutes.togglePlan);
 app.post('/api/admin/plans/delete', adminRoutes.deletePlan);
+app.post('/api/admin/plans/reorder', adminRoutes.reorderPlans);
 
 // 管理员 - 订单管理
 app.get('/api/admin/orders', adminRoutes.getOrders);
@@ -127,6 +128,10 @@ app.get('/api/admin/proxy-ips', adminRoutes.getProxyIPs);
 app.post('/api/admin/proxy-ips', adminRoutes.saveProxyIPs);
 app.get('/api/admin/best-domains', adminRoutes.getBestDomains);
 app.post('/api/admin/best-domains', adminRoutes.saveBestDomains);
+app.post('/api/admin/fetch-best-ips', adminRoutes.fetchBestIPs);
+
+// 用户端 - 获取最佳域名（用于节点状态显示）
+app.get('/api/best-domains', userRoutes.getBestDomains);
 
 // 高级管理功能
 app.post('/api/admin/change-password', adminRoutes.changeAdminPassword);
@@ -201,13 +206,21 @@ async function getUserInfo(req) {
         lastLogin: user.last_login,
         expiry: uuidUser ? uuidUser.expiry : null,
         enabled: uuidUser ? uuidUser.enabled === 1 : false,
-        name: uuidUser ? uuidUser.name : user.username
+        name: uuidUser ? uuidUser.name : user.username,
+        last_checkin: user.last_checkin || 0,
+        checkin_streak: user.checkin_streak || 0,
+        total_checkin_days: user.total_checkin_days || 0
     };
 }
 
 // 定时任务：每15分钟自动更新优选IP和清理非活跃用户
 cron.schedule('*/15 * * * *', async () => {
     console.log('[定时任务] 开始执行...');
+    
+    // 保存执行时间
+    const settings = db.getSettings() || {};
+    settings.lastCronSyncTime = Date.now();
+    db.saveSettings(settings);
     
     try {
         // 自动更新优选IP
@@ -380,5 +393,3 @@ app.listen(PORT, '0.0.0.0', () => {
 ✅ 节点API: http://localhost:${PORT}/api/users
     `);
 });
-
-module.exports = { fetchBestIPsFromWeb };
