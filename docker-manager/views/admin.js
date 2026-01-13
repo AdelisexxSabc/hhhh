@@ -3294,18 +3294,19 @@ function renderAdminPanel() {
         return;
       }
       
-      let html = '<div class="flex items-center justify-between">';
-      html += '<div class="flex items-center gap-2">';
+      let html = '<div class="flex flex-col sm:flex-row items-center justify-between gap-3">';
+      html += '<div class="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">';
       
       // 上一页按钮
       html += '<button onclick="loadAllOrders(' + (page - 1) + ')" ' + 
         (page <= 1 ? 'disabled' : '') + 
-        ' class="px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">' +
+        ' class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">' +
         '<span class="material-symbols-outlined text-sm">chevron_left</span>' +
         '</button>';
       
-      // 页码按钮
-      const maxVisible = 7;
+      // 页码按钮 - 移动端显示更少的页码
+      const isMobile = window.innerWidth < 640;
+      const maxVisible = isMobile ? 3 : 7;
       let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
       let endPage = Math.min(totalPages, startPage + maxVisible - 1);
       
@@ -3314,14 +3315,14 @@ function renderAdminPanel() {
       }
       
       if (startPage > 1) {
-        html += '<button onclick="loadAllOrders(1)" class="px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">1</button>';
+        html += '<button onclick="loadAllOrders(1)" class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">1</button>';
         if (startPage > 2) {
-          html += '<span class="px-2 text-slate-400">...</span>';
+          html += '<span class="px-1 sm:px-2 text-slate-400">...</span>';
         }
       }
       
       for (let i = startPage; i <= endPage; i++) {
-        html += '<button onclick="loadAllOrders(' + i + ')" class="px-3 py-1.5 text-sm border rounded transition-colors ' + 
+        html += '<button onclick="loadAllOrders(' + i + ')" class="px-2 sm:px-3 py-1.5 text-sm border rounded transition-colors ' + 
           (i === page 
             ? 'bg-primary text-white border-primary' 
             : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800') + 
@@ -3330,29 +3331,29 @@ function renderAdminPanel() {
       
       if (endPage < totalPages) {
         if (endPage < totalPages - 1) {
-          html += '<span class="px-2 text-slate-400">...</span>';
+          html += '<span class="px-1 sm:px-2 text-slate-400">...</span>';
         }
-        html += '<button onclick="loadAllOrders(' + totalPages + ')" class="px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">' + totalPages + '</button>';
+        html += '<button onclick="loadAllOrders(' + totalPages + ')" class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">' + totalPages + '</button>';
       }
       
       // 下一页按钮
       html += '<button onclick="loadAllOrders(' + (page + 1) + ')" ' + 
         (page >= totalPages ? 'disabled' : '') + 
-        ' class="px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">' +
+        ' class="px-2 sm:px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">' +
         '<span class="material-symbols-outlined text-sm">chevron_right</span>' +
         '</button>';
       
       html += '</div>';
       
       // 页面大小选择器
-      html += '<div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">';
-      html += '<span>每页</span>';
-      html += '<select onchange="changeOrdersPageSize(this.value)" class="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">';
+      html += '<div class="flex items-center gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">';
+      html += '<span class="hidden sm:inline">每页</span>';
+      html += '<select onchange="changeOrdersPageSize(this.value)" class="px-2 py-1 text-xs sm:text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">';
       [10, 20, 50, 100].forEach(size => {
         html += '<option value="' + size + '"' + (ordersPagination.pageSize === size ? ' selected' : '') + '>' + size + '</option>';
       });
       html += '</select>';
-      html += '<span>条</span>';
+      html += '<span class="hidden sm:inline">条</span>';
       html += '</div>';
       
       html += '</div>';
